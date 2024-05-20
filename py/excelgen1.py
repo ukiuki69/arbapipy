@@ -31,21 +31,20 @@ def outPut(dt):
 def getDt():
   arg = cgi.FieldStorage()
   prms = {
-    # hid=W3GfPPEL&bid=WtSvjBYB&stamp=1709343255077
     'a': 'fetchDocument',
-    'hid': 'W3GfPPEL',
-    'bid': 'WtSvjBYB',
-    'stamp': '1709343255077',
-    # 'hid': arg['hid'].value,
-    # 'bid': arg['bid'].value,
-    # 'stamp': arg['stamp'].value,
+    # 'hid': 'LE5MMsTF',
+    # 'bid': 'p0CxjWNL',
+    # 'stamp': '1612333843972',
+    'hid': arg['hid'].value,
+    'bid': arg['bid'].value,
+    'stamp': arg['stamp'].value,
   }
   rt = requests.post(APIURL, prms)
   return(rt.text)
 
 def handleFlile(dobj):
   # コピー先ファイル名を分解
-  import pdb; pdb.set_trace()
+  dobj['dst'] = os.path.split(dobj['dt'][0]['dst'])
   dstdir = DOCDIR + dobj['dst'][0]
   # ディレクトリ作成
   if os.path.exists(dstdir) == False:

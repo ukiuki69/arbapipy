@@ -22,6 +22,7 @@ define ("SLEEP", 0); // テスト用遅延時間
 // テスト用
 // $allowGet = true;
 // $returnSql = true;
+// // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
 // define ("DBNAME", "albatross56_albtest"); // テスト用
 // $fscgi = 'y_fs_cgi.py'; // 運用テスト用
 
@@ -33,6 +34,7 @@ $fscgi = 'fs_cgi.py'; // 本番用
 
 define ("DBNAMEREAL", "albatross56_sv1"); // 本番用
 
+// define ("DBNAME", "albatross56_sandbox"); // サンドボックス
 
 require './cipher.php';
 
@@ -341,11 +343,11 @@ function companybrunchM(){
   $bid = PRMS('bid');
   $date = PRMS('date');
 
+    // com.confirmPayment,
   $sql = "
     select brunch.*, 
     com.hname, com.shname, com.postal cpostal, com.city ccity,
     com.address caddress, com.tel ctel, com.fax cfax, com.etc cetc,
-    com.confirmPayment,
     bext.ext
     from ahdbrunch brunch 
     join ahdcompany com
@@ -725,7 +727,6 @@ function sendPartOfSchedule(){
   ";
   
   $rt = unvEdit($mysqli, $sql);
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
   if ($rt['result']){
     $mysqli->commit();
   }
@@ -733,6 +734,7 @@ function sendPartOfSchedule(){
     $mysqli->rollback();
   }
   $mysqli->close();
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 }
 
 
@@ -777,6 +779,17 @@ function sendPartOfContact(){
     $hid = $preSearch['hid'];
     $bid = $preSearch['bid'];
   }
+  $state = $mysqli->real_escape_string(PRMS('partOfContact'));
+  $keep = 14;
+  $item = 'sendpartofcontent_log';
+  $sql = "
+    insert into ahdLog (hid,bid,date,state,item,keep)
+    values ('$hid','$bid','$date,','$state','$item','$keep')
+    on duplicate key update
+    state = '$state', keep = '$keep', timestamp = CURRENT_TIMESTAMP
+  ";
+  $rt = unvEdit($mysqli, $sql);
+
   $sql = "
     select contacts from ahdcontacts 
     where hid='$hid'
@@ -802,7 +815,7 @@ function sendPartOfContact(){
   if (json_last_error() !== JSON_ERROR_NONE) {
     $errobj = [
       'result' => false,
-      'msg' => "Invalid preCon JSON",
+      'msg' => "Invalid contacts on DB JSON " . json_last_error_msg(),
       'sqla' => $sqla
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
@@ -815,7 +828,7 @@ function sendPartOfContact(){
   if (json_last_error() !== JSON_ERROR_NONE) {
     $errobj = [
       'result' => false,
-      'msg' => "Invalid partOfContact JSON",
+      'msg' => "Invalid partOfContact JSON " . json_last_error_msg(),
       'sqla' => $sqla
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
@@ -861,7 +874,6 @@ function sendPartOfContact(){
   if ($returnSql) $sqla[] = $sql;
   $rt = unvEdit($mysqli, $sql);
   if ($returnSql) $rt['sqla'] = $sqla;
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   if ($rt['result']){
     $mysqli->commit();
   }
@@ -869,6 +881,8 @@ function sendPartOfContact(){
     $mysqli->rollback();
   }
   $mysqli->close();
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+
 }
 
 function sendContactForFap(){
@@ -4350,7 +4364,6 @@ function sendPartOfDailyReport(){
   ";
   
   $rt = unvEdit($mysqli, $sql);
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
   if ($rt['result']){
     $mysqli->commit();
   }
@@ -4358,6 +4371,7 @@ function sendPartOfDailyReport(){
     $mysqli->rollback();
   }
   $mysqli->close();
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 }
 
 function fetchScheduleTimeStamp(){
@@ -4482,6 +4496,107 @@ function fetchUniqBids () {
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
+
+function fetchUsersPlan(){
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $uid = PRMS('uid');
+  $created = PRMS('created');
+  $item = PRMS('item');
+  $month = PRMS('month');
+  $lastmonth = PRMS('lastmonth');
+  $limit = PRMS('limit');
+  
+  // 基本クエリ
+  $sql = "SELECT hid, bid, uid, created, item, content, timestamp
+          FROM ahdUsersPlan 
+          WHERE hid='{$hid}' AND bid='{$bid}'";
+  
+  // オプショナルパラメータ
+  if (!empty($uid)) {
+    $sql .= " AND uid='{$uid}'";
+  }
+  if (!empty($created)) {
+    $sql .= " AND created='{$created}'";
+  }
+  if (!empty($item)) {
+    $sql .= " AND item='{$item}'";
+  }
+  if (!empty($month)) {
+    $sql .= " AND created LIKE '{$month}%'";
+  }
+  if (!empty($lastmonth)) {
+    $sql .= " AND created <= LAST_DAY('{$lastmonth}-01')";
+    $sql .= " AND created >= LAST_DAY('{$lastmonth}-01') - INTERVAL 1 YEAR - INTERVAL 1 MONTH";
+  }
+  $sql .= ' ORDER BY `created` DESC';
+  if (!empty($limit)) {
+    $sql .= " limit 0, {$limit}";
+  }
+  // lastmanthを指定するときはlimitを指定しない
+  if (empty($lastmonth)){
+    $sql .= " limit 0, 10";
+  }
+
+  $mysqli = connectDb();
+  $rt = unvList($mysqli, $sql); // unvList関数にSQLクエリを直接渡す
+  if (isset($rt['dt']) && count($rt['dt'])) {
+    foreach ($rt['dt'] as $key => $value) {
+      if(isset($value['content'])) {
+        $rt['dt'][$key]['content'] = json_decode($value['content'], true);
+      }
+    }
+  }
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+function sendUsersPlan(){
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $uid = PRMS('uid');
+  $created = PRMS('created');
+  $item = PRMS('item');
+  $content = PRMS('content');
+  $mysqli = connectDb();
+  $sql = "
+    insert into ahdUsersPlan (hid,bid,uid,created,item,content)
+    values ('$hid','$bid','$uid','$created','$item', '$content')
+    on duplicate key update
+    content = '$content'
+  ";
+  $rt = unvEdit($mysqli, $sql);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+function deleteUsersPlan(){
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $uid = PRMS('uid');
+  $item = PRMS('item');
+  $created = PRMS('created');
+  $mysqli = connectDb();
+  $sql = "
+    DELETE FROM ahdUsersPlan
+    WHERE hid = '$hid'
+    AND bid = '$bid'
+    AND uid = '$uid'
+    AND created = '$created'
+  ";
+
+  // itemが指定されている場合は条件に追加
+  if($item !== ''){
+    $sql .= " AND item = '$item'";
+  }
+  
+  $sql .= ";";
+
+  $rt = unvEdit($mysqli, $sql);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
 
 
 function nothing(){
@@ -4652,6 +4767,10 @@ else if ($m == 'fetchHidBidByJino') fetchHidBidByJino();
 else if ($m == 'fetchTimeStamps') fetchTimeStamps();
 // ユニークなbidの取得
 else if ($m == 'fetchUniqBids') fetchUniqBids();
+// 個別支援計画
+else if ($m == 'fetchUsersPlan') fetchUsersPlan();
+else if ($m == 'sendUsersPlan') sendUsersPlan();
+else if ($m == 'deleteUsersPlan') deleteUsersPlan();
 
 
 
