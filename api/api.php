@@ -348,6 +348,7 @@ function companybrunchM(){
     select brunch.*, 
     com.hname, com.shname, com.postal cpostal, com.city ccity,
     com.address caddress, com.tel ctel, com.fax cfax, com.etc cetc,
+    com.yaku daihyouyakusyoku, com.daihyou daihyou,
     bext.ext
     from ahdbrunch brunch 
     join ahdcompany com
@@ -742,6 +743,7 @@ function sendPartOfSchedule(){
 // Keyが与えられた項目 UIDxxx等でcontactを更新する。
 // hid, bidは上6桁のマッチでokとするが該当する事業所内にメールアドレスが
 // 存在しない場合はエラーとする
+
 function sendPartOfContact(){
   global $returnSql;
   $hid = PRMS('hid');
@@ -788,7 +790,7 @@ function sendPartOfContact(){
     on duplicate key update
     state = '$state', keep = '$keep', timestamp = CURRENT_TIMESTAMP
   ";
-  $rt = unvEdit($mysqli, $sql);
+  $sendLogRt = unvEdit($mysqli, $sql);
 
   $sql = "
     select contacts from ahdcontacts 
@@ -816,6 +818,7 @@ function sendPartOfContact(){
     $errobj = [
       'result' => false,
       'msg' => "Invalid contacts on DB JSON " . json_last_error_msg(),
+      'sendLogRt' => $sendLogRt,
       'sqla' => $sqla
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
@@ -829,6 +832,7 @@ function sendPartOfContact(){
     $errobj = [
       'result' => false,
       'msg' => "Invalid partOfContact JSON " . json_last_error_msg(),
+      'sendLogRt' => $sendLogRt,
       'sqla' => $sqla
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
@@ -837,8 +841,6 @@ function sendPartOfContact(){
     return false;
   }
 
-  // ロック確認のために待機
-  // sleep(SLEEP);
   // マージする配列があるかどうか確認
   if (is_array($preCon) && is_array($partOfContact)){
     $merged = array_merge($preCon, $partOfContact);
@@ -849,6 +851,7 @@ function sendPartOfContact(){
       'msg' => "array marge error",
       'sqla' => $sqla,
       'preCon' => $preCon,
+      'sendLogRt' => $sendLogRt,
       'partOfContact' => $partOfContact,
       
     ];
@@ -881,9 +884,258 @@ function sendPartOfContact(){
     $mysqli->rollback();
   }
   $mysqli->close();
+  $rt['sendLogRt'] = $sendLogRt;
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
-
 }
+
+function sendOneMessageOfContact(){
+  global $returnSql;
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $token = PRMS('token');
+  $date = PRMS('date');
+  $uid = PRMS('uid');
+  $did = PRMS('did');
+  $msgIndex = (int)PRMS('msgIndex');
+  $message = PRMS('message');
+  
+  // Parse message if it's a JSON string
+  $decodedMessage = json_decode($message, true);
+  if (json_last_error() === JSON_ERROR_NONE) {
+    $message = $decodedMessage;
+  }
+
+  $sqla = [];
+  $mysqli = connectDb();
+  $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+  
+  $sql = "
+    select hid, bid from ahduser
+    where hid like '$hid%'
+    and bid like '$bid%'
+    and '$token' like concat('%', faptoken, '%') and faptoken != '';
+  ";
+  
+  // 短いhid,bidが設定されているかどうか
+  $shortHidBid = ((strlen($hid) < 8) || (strlen($bid) < 8));
+  if ($shortHidBid){
+    $rt = unvList($mysqli, $sql);
+    if ($returnSql) $sqla[] = $sql;
+    if (!count($rt['dt'])){
+      $errobj = [
+        'result' => false,
+        'msg' => "mail not found",
+        'sqla' => $sqla
+      ];
+      echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+      $mysqli->rollback();
+      $mysqli->close();    
+      return false;
+    }
+    $preSearch = $rt['dt'][0];
+    $hid = $preSearch['hid'];
+    $bid = $preSearch['bid'];
+  }
+  
+  $state = $mysqli->real_escape_string(PRMS('partOfContact'));
+  $keep = 14;
+  $item = 'sendpartofcontent_log';
+  $sql = "
+    insert into ahdLog (hid,bid,date,state,item,keep)
+    values ('$hid','$bid','$date','$state','$item','$keep')
+    on duplicate key update
+    state = '$state', keep = '$keep', timestamp = CURRENT_TIMESTAMP
+  ";
+  $sendLogRt = unvEdit($mysqli, $sql);
+
+  $sql = "
+    select contacts from ahdcontacts 
+    where hid='$hid'
+    and bid='$bid'
+    and date='$date'
+    FOR UPDATE;
+  ";
+  $rt = unvList($mysqli, $sql);
+  if (count($rt['dt'])){
+    $preCon = $rt['dt'][0]['contacts'];
+  }
+  else{
+    $preCon = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
+  }
+  if ($returnSql) $sqla[] = $sql;
+
+  $preCon = json_decode(escapeChar($preCon), true);
+  if (json_last_error() !== JSON_ERROR_NONE) {
+    $errobj = [
+      'result' => false,
+      'msg' => "Invalid contacts on DB JSON " . json_last_error_msg(),
+      'sendLogRt' => $sendLogRt,
+      'sqla' => $sqla
+    ];
+    echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+
+  // マージする配列があるかどうか確認
+  if (!isset($preCon[$uid])) {
+    $preCon[$uid] = [];
+  }
+  if (!isset($preCon[$uid][$did])) {
+    $preCon[$uid][$did] = [
+      ['content' => ''],
+      ['content' => ''],
+      ['content' => '']
+    ];
+  }
+  
+  // インデックスにメッセージを設定
+  $preCon[$uid][$did][$msgIndex] = $message;
+
+  
+  $finalJson = json_encode($preCon, JSON_UNESCAPED_UNICODE);
+  $finalJson = escapeChar($finalJson);
+  $finalJson = $mysqli->real_escape_string($finalJson);
+
+  $sql = "
+    insert into ahdcontacts (hid,bid,date,contacts)
+    values ('$hid','$bid','$date','$finalJson')
+    on duplicate key update
+    contacts = '$finalJson'
+  ";
+  if ($returnSql) $sqla[] = $sql;
+  $rt = unvEdit($mysqli, $sql);
+  if ($returnSql) $rt['sqla'] = $sqla;
+  if ($rt['result']){
+    $mysqli->commit();
+  }
+  else{
+    $mysqli->rollback();
+  }
+  $mysqli->close();
+  $rt['sendLogRt'] = $sendLogRt;
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+}
+
+function sendDtUnderUidOfContact(){
+  global $returnSql;
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $token = PRMS('token');
+  $date = PRMS('date');
+  $uid = PRMS('uid');
+  $content = PRMS('content');
+  
+  // Parse content if it's a JSON string
+  $decodedContent = json_decode($content, true);
+  if (json_last_error() === JSON_ERROR_NONE) {
+    $content = $decodedContent;
+  }
+
+  $sqla = [];
+  $mysqli = connectDb();
+  $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+  
+  $sql = "
+    select hid, bid from ahduser
+    where hid like '$hid%'
+    and bid like '$bid%'
+    and '$token' like concat('%', faptoken, '%') and faptoken != '';
+  ";
+  
+  // 短いhid,bidが設定されているかどうか
+  $shortHidBid = ((strlen($hid) < 8) || (strlen($bid) < 8));
+  if ($shortHidBid){
+    $rt = unvList($mysqli, $sql);
+    if ($returnSql) $sqla[] = $sql;
+    if (!count($rt['dt'])){
+      $errobj = [
+        'result' => false,
+        'msg' => "mail not found",
+        'sqla' => $sqla
+      ];
+      echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+      $mysqli->rollback();
+      $mysqli->close();    
+      return false;
+    }
+    $preSearch = $rt['dt'][0];
+    $hid = $preSearch['hid'];
+    $bid = $preSearch['bid'];
+  }
+  
+  $state = $mysqli->real_escape_string(PRMS('partOfContact'));
+  $keep = 14;
+  $item = 'sendpartofcontent_log';
+  $sql = "
+    insert into ahdLog (hid,bid,date,state,item,keep)
+    values ('$hid','$bid','$date','$state','$item','$keep')
+    on duplicate key update
+    state = '$state', keep = '$keep', timestamp = CURRENT_TIMESTAMP
+  ";
+  $sendLogRt = unvEdit($mysqli, $sql);
+
+  $sql = "
+    select contacts from ahdcontacts 
+    where hid='$hid'
+    and bid='$bid'
+    and date='$date'
+    FOR UPDATE;
+  ";
+  $rt = unvList($mysqli, $sql);
+  if (count($rt['dt'])){
+    $preCon = $rt['dt'][0]['contacts'];
+  }
+  else{
+    $preCon = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
+  }
+  if ($returnSql) $sqla[] = $sql;
+
+  $preCon = json_decode(escapeChar($preCon), true);
+  if (json_last_error() !== JSON_ERROR_NONE) {
+    $errobj = [
+      'result' => false,
+      'msg' => "Invalid contacts on DB JSON " . json_last_error_msg(),
+      'sendLogRt' => $sendLogRt,
+      'sqla' => $sqla
+    ];
+    echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+
+  // UID配下にデータオブジェクトを追加
+  if (!isset($preCon[$uid])) {
+    $preCon[$uid] = new stdClass();
+  }
+  $preCon[$uid] = array_merge((array)$preCon[$uid], $content);
+
+  $finalJson = json_encode($preCon, JSON_UNESCAPED_UNICODE);
+  $finalJson = escapeChar($finalJson);
+  $finalJson = $mysqli->real_escape_string($finalJson);
+
+  $sql = "
+    insert into ahdcontacts (hid,bid,date,contacts)
+    values ('$hid','$bid','$date','$finalJson')
+    on duplicate key update
+    contacts = '$finalJson'
+  ";
+  if ($returnSql) $sqla[] = $sql;
+  $rt = unvEdit($mysqli, $sql);
+  if ($returnSql) $rt['sqla'] = $sqla;
+  if ($rt['result']){
+    $mysqli->commit();
+  }
+  else{
+    $mysqli->rollback();
+  }
+  $mysqli->close();
+  $rt['sendLogRt'] = $sendLogRt;
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+}
+
 
 function sendContactForFap(){
   global $returnSql;
@@ -2432,23 +2684,22 @@ function sendDocument(){
   $stamp = PRMS('stamp');
   $template = PRMS('template');
   $dst = PRMS('dst');
-  $content = PRMS('content');
+  // $content = PRMS('content');
   $mysqli = connectDbPrd();
-
+  $content = $mysqli->real_escape_string(PRMS('content'));
   $sql = "
-    insert into ahddocdt (
-      hid, bid, stamp, template, dst, content
+    INSERT INTO ahddocdt (
+        hid, bid, stamp, template, dst, content
+    ) VALUES (
+        '$hid', '$bid', '$stamp', '$template', '$dst', '$content'
     )
-    values(
-      '$hid', '$bid', '$stamp', '$template', '$dst', '$content'
-    )
-    on duplicate key update
-      hid = '$hid',
-      bid = '$bid',
-      stamp = '$stamp',
-      template = '$template',
-      dst = '$dst',
-      content = '$content';
+    ON DUPLICATE KEY UPDATE
+        hid = VALUES(hid),
+        bid = VALUES(bid),
+        stamp = VALUES(stamp),
+        template = VALUES(template),
+        dst = VALUES(dst),
+        content = VALUES(content);
   ";
   $rt = unvEdit($mysqli, $sql);
   // 古いデータを削除する
@@ -4374,6 +4625,176 @@ function sendPartOfDailyReport(){
   echo json_encode($rt, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 }
 
+function sendPartOfDailyReportWithKey(){
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $partOfRpt = PRMS('partOfRpt');
+  $key1 = PRMS('key1');
+  
+  $mysqli = connectDb();
+  $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+  
+  $sql = "
+    select dailyreport from ahddailyreport 
+    where hid='$hid'
+    and bid='$bid'
+    and date='$date'
+    FOR UPDATE;
+  ";
+  
+  $rt = unvList($mysqli, $sql);
+
+  if (count($rt['dt'])){
+    $preSch = $rt['dt'][0]['dailyreport'];
+  } else {
+    $preSch = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
+  }
+
+  if (!$preSch){
+    echo '{"result":false}';
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+
+  $preSch = mb_convert_encoding($preSch, 'UTF-8');
+  $preSch = json_decode($preSch, true);
+  if (json_last_error() !== JSON_ERROR_NONE) {
+    echo json_last_error_msg();
+    echo '{"result":false, "error": "Invalid preSch JSON"}';
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+
+  $partOfRpt = json_decode($partOfRpt, true);
+  if (json_last_error() !== JSON_ERROR_NONE) {
+    echo '{"result":false, "error": "Invalid partOfRpt JSON"}';
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+
+  // $key1の値を指定されたUID配下に追加または置換
+  if (isset($preSch[$key1]) && is_array($preSch[$key1])) {
+    foreach ($partOfRpt as $key => $value) {
+      $preSch[$key1][$key] = $value;
+    }
+  } else {
+    $preSch[$key1] = $partOfRpt;
+  }
+
+  $finalJson = json_encode($preSch, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  $finalJson = escapeChar($finalJson);
+  $finalJson = mysqli_real_escape_string($mysqli, $finalJson);
+
+  $sql = "
+    insert into ahddailyreport (hid, bid, date, dailyreport)
+    values ('$hid', '$bid', '$date', '$finalJson')
+    on duplicate key update
+    dailyreport = '$finalJson'
+  ";
+  
+  $rt = unvEdit($mysqli, $sql);
+  if ($rt['result']) {
+    $mysqli->commit();
+  } else {
+    $mysqli->rollback();
+  }
+  $mysqli->close();
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function sendPartOfDailyReportWith2Key(){
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $key1 = PRMS('key1');
+  $key2 = PRMS('key2');
+  $partOfRpt = PRMS('partOfRpt');
+  
+  $mysqli = connectDb();
+  $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+  
+  $sql = "
+    select dailyreport from ahddailyreport 
+    where hid='$hid'
+    and bid='$bid'
+    and date='$date'
+    FOR UPDATE;
+  ";
+  
+  $rt = unvList($mysqli, $sql);
+
+  if (count($rt['dt'])){
+    $preSch = $rt['dt'][0]['dailyreport'];
+  } else {
+    $preSch = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
+  }
+
+  if (!$preSch){
+    echo '{"result":false}';
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+
+  $preSch = mb_convert_encoding($preSch, 'UTF-8');
+  $preSch = json_decode($preSch, false); // オブジェクトとしてデコード
+  if (json_last_error() !== JSON_ERROR_NONE) {
+    echo json_last_error_msg();
+    echo '{"result":false, "error": "Invalid preSch JSON"}';
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+
+  $partOfRpt = json_decode($partOfRpt, false); // オブジェクトとしてデコード
+  if (json_last_error() !== JSON_ERROR_NONE) {
+    echo '{"result":false, "error": "Invalid partOfRpt JSON"}';
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+
+  // $key1の配下に$key2を追加または置換
+  if (!isset($preSch->$key1) || !is_object($preSch->$key1)) {
+    $preSch->$key1 = new stdClass();
+  }
+
+  if (!isset($preSch->$key1->$key2) || !is_object($preSch->$key1->$key2)) {
+    $preSch->$key1->$key2 = new stdClass();
+  }
+
+  // $key2の配下にpartOfRptを追加または置換
+  foreach ($partOfRpt as $key => $value) {
+    $preSch->$key1->$key2->$key = $value;
+  }
+  
+  $finalJson = json_encode($preSch, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  $finalJson = escapeChar($finalJson);
+  $finalJson = mysqli_real_escape_string($mysqli, $finalJson);
+
+  $sql = "
+    insert into ahddailyreport (hid, bid, date, dailyreport)
+    values ('$hid', '$bid', '$date', '$finalJson')
+    on duplicate key update
+    dailyreport = '$finalJson'
+  ";
+  
+  $rt = unvEdit($mysqli, $sql);
+  if ($rt['result']) {
+    $mysqli->commit();
+  } else {
+    $mysqli->rollback();
+  }
+  $mysqli->close();
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+
+
 function fetchScheduleTimeStamp(){
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -4445,7 +4866,7 @@ function fetchTimeStamps () {
     $rt['dt'][0]['ahddailyreportStr'] = $t['dt'][0]['timestampStr'];
   };
   
-  if ($t['sql']){
+  if (isset($t['sql'])) {
     $sqls[] = $t['sql'];
   }
   $sql = "
@@ -4460,7 +4881,7 @@ function fetchTimeStamps () {
     $rt['dt'][0]['ahdschedule'] = $t['dt'][0]['timestamp'];
     $rt['dt'][0]['ahdscheduleStr'] = $t['dt'][0]['timestampStr'];
   }
-  if ($t['sql']){
+  if (isset($t['sql'])) {
     $sqls[] = $t['sql'];
   }
   $sql = "
@@ -4475,10 +4896,10 @@ function fetchTimeStamps () {
     $rt['dt'][0]['ahdcontacts'] = $t['dt'][0]['timestamp'];
     $rt['dt'][0]['ahdcontactsStr'] = $t['dt'][0]['timestampStr'];
   }
-  if ($t['sql']){
+  if (isset($t['sql'])) {
     $sqls[] = $t['sql'];
   }
-  if ($sqls){
+  if (isset($sqls)) {
     $rt['sqls'] = $sqls;
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -4596,6 +5017,155 @@ function deleteUsersPlan(){
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
+
+function sendLog(){
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $uid = PRMS('uid');
+  $date = PRMS('date');
+  $item = PRMS('item');
+  $state = escapeChar(PRMS('state')); // 追加
+  $keep = PRMS('keep');
+  $mysqli = connectDb();
+  $state = mysqli_real_escape_string($mysqli, $state);
+  $sql = "
+    insert into ahdLog (hid,bid,uid,date,item,state,keep)
+    values ('$hid','$bid','$uid','$date','$item', '$state', '$keep')
+  ";
+  $rt = unvEdit($mysqli, $sql);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+// function fetchUsersIdByLineId(){
+//   $lineid = PRMS('lineid');
+//   $sql = "
+//     select hid,bid,uid
+//     from ahdusersext
+//     where ext like '%$lineid%'
+//   ";
+//   $mysqli = connectDb();
+//   $rt = unvList($mysqli, $sql);
+//   $jsn = json_encode(escapeChar($rt), JSON_UNESCAPED_UNICODE);
+//   echo $jsn;
+//   $mysqli->close();
+// }
+
+function fetchUsersIdByLineId(){
+  $lineid = PRMS('lineid');
+  $date = PRMS('date'); // 必要に応じて日付を設定してください
+  
+  $sql = "
+    select user.*, 
+      uext.ext, 
+      brunch.bname, brunch.sbname, brunch.jino,  
+      com.hname, com.shname
+    from ahduser as user 
+    join ahdbrunch as brunch using (hid, bid)
+    join ahdcompany as com using (hid)
+    join (
+      SELECT MAX(date) mdate, date, uid, bid, hid 
+      FROM ahduser 
+      where date <= '$date' 
+      GROUP BY uid, hid, bid    
+    ) as lastupdated 
+    on lastupdated.uid = user.uid
+    and lastupdated.bid = user.bid
+    and lastupdated.hid = user.hid
+    and lastupdated.mdate = user.date
+    left join ahdusersext as uext 
+    on lastupdated.uid = uext.uid
+    and lastupdated.bid = uext.bid
+    and lastupdated.hid = uext.hid
+    join (
+      select hid, bid, uid
+      from ahdusersext
+      where ext like '%$lineid%'
+    ) as filtered
+    on user.hid = filtered.hid
+    and user.bid = filtered.bid
+    and user.uid = filtered.uid
+    where
+    (
+      user.enddate = '0000-00-00' OR
+      user.enddate >= '$date'
+    ) 
+    and user.date <= '$date'
+    and brunch.date = (
+      SELECT MAX(date) from ahdbrunch 
+      WHERE bid=filtered.bid and hid=filtered.hid and date<='$date'
+    )
+  ";
+  
+  $mysqli = connectDb();
+  $rt = unvList($mysqli, $sql);
+  $jsn = json_encode(escapeChar($rt), JSON_UNESCAPED_UNICODE);
+  echo $jsn;
+  $mysqli->close();
+}
+
+function fetchWaitingMsg(){
+  $date = PRMS('date');
+  $sql = "
+    select hid, bid, date, contacts from ahdcontacts
+    where date = '$date'
+  ";
+  $mysqli = connectDb();
+  $result = unvList($mysqli, $sql);
+
+  // 今日の日付をJSTで取得
+  $today = new DateTime('now', new DateTimeZone('Asia/Tokyo'));
+  $todayStr = $today->format('Ymd');
+
+  $filteredData = [];
+
+  // フェッチされたデータをループ
+  foreach ($result['dt'] as $row) {
+    $contacts = json_decode($row['contacts'], true);
+    $filteredEntry = [
+      'hid' => $row['hid'],
+      'bid' => $row['bid']
+    ];
+
+    // contactsをループ
+    foreach ($contacts as $uidKey => $uidValue) {
+      if (strpos($uidKey, 'UID') !== 0) continue;
+
+      foreach ($uidValue as $dateKey => $dateArray) {
+        if (strpos($dateKey, 'D') !== 0) continue;
+
+        $contactDate = substr($dateKey, 1);
+        if ($contactDate > $todayStr) continue;
+
+        $includeDateArray = false;
+
+        foreach ($dateArray as $contact) {
+          $sent = isset($contact['sent']) ? $contact['sent'] : true;
+          $draft = isset($contact['draft']) ? $contact['draft'] : true;
+
+          if (!$sent && !$draft) {
+            $includeDateArray = true;
+            break;
+          }
+        }
+
+        if ($includeDateArray) {
+          $filteredEntry[$uidKey][$dateKey] = $dateArray;
+        }
+      }
+    }
+
+    if (count($filteredEntry) > 2) { // 'hid' と 'bid' 以外の要素があるかを確認
+      $filteredData[] = $filteredEntry;
+    }
+  }
+
+  $jsn = json_encode($filteredData, JSON_UNESCAPED_UNICODE);
+  echo $jsn;
+  $mysqli->close();
+}
+
+
 
 
 
@@ -4720,6 +5290,8 @@ else if ($m === 'removeUsageFee') removeUsageFee();
 // 連絡帳
 else if ($m == 'fetchContactsForFAP') fetchContactsForFAP();
 else if ($m == 'sendPartOfContact') sendPartOfContact();
+else if ($m == 'sendOneMessageOfContact') sendOneMessageOfContact();
+else if ($m == 'sendDtUnderUidOfContact') sendDtUnderUidOfContact();
 else if ($m == 'sendContactForFap') sendContactForFap();
 else if ($m == 'sendPartOfContactJino') sendPartOfContactJino();
 else if ($m == 'fetchPartOfContactJino') fetchPartOfContactJino();
@@ -4729,6 +5301,8 @@ else if ($m == 'sendFapNoticeMailPost') sendFapNoticeMailPost();
 else if ($m == 'sendFapNoticeMail') sendFapNoticeMail();
 else if ($m == 'sendHtmlMail') sendHtmlMail();
 else if ($m == 'createAutoMsg') createAutoMsg();
+else if ($m == 'fetchUsersIdByLineId') fetchUsersIdByLineId();
+else if ($m == 'fetchWaitingMsg') fetchWaitingMsg();
 // 拡張項目　月のデータを持たない法人情報とユーザー情報
 else if ($m == 'sendUsersExt') sendUsersExt();
 else if ($m == 'fetchUsersExt') fetchUsersExt();
@@ -4758,6 +5332,9 @@ else if ($m == 'fetchSchBackup') fetchSchBackup();
 // 日報
 else if ($m == 'fetchDailyReport') fetchDailyReport();
 else if ($m == 'sendPartOfDailyReport') sendPartOfDailyReport();
+else if ($m == 'sendPartOfDailyReportWithKey') sendPartOfDailyReportWithKey();
+else if ($m == 'sendPartOfDailyReportWith2Key') sendPartOfDailyReportWith2Key();
+
 // タイムスタンプの取得
 else if ($m == 'fetchScheduleTimeStamp') fetchScheduleTimeStamp();
 else if ($m == 'fetchDailyReportTimeStamp') fetchDailyReportTimeStamp();
@@ -4771,6 +5348,7 @@ else if ($m == 'fetchUniqBids') fetchUniqBids();
 else if ($m == 'fetchUsersPlan') fetchUsersPlan();
 else if ($m == 'sendUsersPlan') sendUsersPlan();
 else if ($m == 'deleteUsersPlan') deleteUsersPlan();
+else if ($m == 'sendLog') sendLog();
 
 
 

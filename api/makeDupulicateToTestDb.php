@@ -75,8 +75,10 @@ foreach ($tables as $table) {
         $res = $source_conn->query("SELECT * FROM `$table` WHERE hid NOT IN ('$exclude_hid_string') LIMIT $offset, $page_size");
         while ($row = $res->fetch_assoc()) {
           $keys = join('`, `', array_keys($row));
-          $values = join("', '", $row);
-
+          // $values = join("', '", $row);
+          $values = join("', '", array_map(function($value) use ($target_conn) {
+            return $target_conn->real_escape_string($value);
+          }, $row));
           $target_conn->query("INSERT INTO `$table` (`$keys`) VALUES ('$values')");
         }
       }

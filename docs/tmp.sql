@@ -1,0 +1,1 @@
+select user.*,        brunch.bname, brunch.sbname, brunch.jino,         com.hname, com.shname     from ahduser as user      join ahdbrunch as brunch using (hid, bid)     join ahdcompany as com using (hid)     where     user.hid = 'LE5MMsTF' AND     user.bid = 'p0CxjWNM'

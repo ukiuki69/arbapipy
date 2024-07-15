@@ -167,6 +167,8 @@ function main(){
     WHERE timestamp < (now() - INTERVAL 2 HOUR - INTERVAL keep DAY);
     delete FROM `ahdAnyState` 
     WHERE timestamp < (now() - INTERVAL 2 HOUR - INTERVAL keep DAY);
+    delete FROM `ahdLog` 
+    WHERE timestamp < (now() - INTERVAL 2 HOUR - INTERVAL keep DAY);
     delete from ahdsenddt 
     WHERE gen < (now() - INTERVAL 4 HOUR);
   ";
