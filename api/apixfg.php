@@ -5106,6 +5106,7 @@ function fetchUsersIdByLineId(){
 
 function fetchWaitingMsg(){
   $date = PRMS('date');
+  $after = PRMS('after');
   $sql = "
     select hid, bid, date, contacts from ahdcontacts
     where date = '$date'
@@ -5116,6 +5117,13 @@ function fetchWaitingMsg(){
   // 今日の日付をJSTで取得
   $today = new DateTime('now', new DateTimeZone('Asia/Tokyo'));
   $todayStr = $today->format('Ymd');
+
+  // after日付の設定
+  $afterDateStr = null;
+  if ($after) {
+    $afterDate = new DateTime($after, new DateTimeZone('Asia/Tokyo'));
+    $afterDateStr = $afterDate->format('Ymd');
+  }
 
   $filteredData = [];
 
@@ -5136,6 +5144,7 @@ function fetchWaitingMsg(){
 
         $contactDate = substr($dateKey, 1);
         if ($contactDate > $todayStr) continue;
+        if ($afterDateStr && $contactDate < $afterDateStr) continue;
 
         $includeDateArray = false;
 
