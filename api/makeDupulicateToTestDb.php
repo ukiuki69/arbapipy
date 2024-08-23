@@ -32,6 +32,7 @@ $tables = [
   'ahduser',
   'ahdusersext',
   'ahdworkshift',
+  'ahddailyreport',
 ];
 
 $exclude_hid = ['LE5MMsTF']; // 除外するhid
