@@ -19,18 +19,27 @@ define ("SLEEP", 0); // テスト用遅延時間
 //   header("Access-Control-Allow-Origin: {$reqHeaders['Origin']}");
 // }
 
-// テスト用
-// $allowGet = true;
-// $returnSql = true;
-// // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
-// define ("DBNAME", "albatross56_albtest"); // テスト用
-// $fscgi = 'y_fs_cgi.py'; // 運用テスト用
+$self = basename(__FILE__);
 
-// 本番用
-$allowGet = false;
-$returnSql = false;
-define ("DBNAME", "albatross56_sv1"); // 本番用
-$fscgi = 'fs_cgi.py'; // 本番用
+if ($self !== 'api.php'){
+  // テスト用
+  $allowGet = true;
+  $returnSql = true;
+  // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
+  define ("DBNAME", "albatross56_albtest"); // テスト用
+  $fscgi = 'y_fs_cgi.py'; // 運用テスト用
+}
+else{
+  // 本番用
+  $allowGet = false;
+  $returnSql = false;
+  define ("DBNAME", "albatross56_sv1"); // 本番用
+  $fscgi = 'fs_cgi.py'; // 本番用
+}
+if ($self === 'apixfg.php'){
+  $returnSql = false;
+}
+
 
 define ("DBNAMEREAL", "albatross56_sv1"); // 本番用
 
@@ -223,7 +232,7 @@ function unvMultiEdit($mysqli, $sql){
 }
 
 function zip(){
-  $postal = PRMS('postal');
+  $postal = PRMS('postal', true);
   $url = "https://zipcloud.ibsnet.co.jp/api/search?zipcode=" . $postal;
   $json = file_get_contents($url);
   $json = mb_convert_encoding($json, 'UTF8', 'ASCII,JIS,UTF-8,EUC-JP,SJIS-WIN');
@@ -899,6 +908,22 @@ function sendOneMessageOfContact(){
   $msgIndex = (int)PRMS('msgIndex');
   $message = PRMS('message');
   
+  // パラメータのエラーチェック
+  if (empty($hid)) {
+    echo json_encode(['result' => false, 'error' => 'hid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
+  if (empty($bid)) {
+    echo json_encode(['result' => false, 'error' => 'bid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
+  if ($hid === $bid) {
+    echo json_encode(['result' => false, 'error' => 'hid and bid must not be the same'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
   // Parse message if it's a JSON string
   $decodedMessage = json_decode($message, true);
   if (json_last_error() === JSON_ERROR_NONE) {
@@ -1027,6 +1052,22 @@ function sendDtUnderUidOfContact(){
   $uid = PRMS('uid');
   $content = PRMS('content');
   
+  // パラメータのエラーチェック
+  if (empty($hid)) {
+    echo json_encode(['result' => false, 'error' => 'hid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
+  if (empty($bid)) {
+    echo json_encode(['result' => false, 'error' => 'bid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
+  if ($hid === $bid) {
+    echo json_encode(['result' => false, 'error' => 'hid and bid must not be the same'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
   // Parse content if it's a JSON string
   $decodedContent = json_decode($content, true);
   if (json_last_error() === JSON_ERROR_NONE) {
@@ -1306,15 +1347,20 @@ function sendPartOfContactJino(){
   // 事業所番号よりhid, bidを得る
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+  // SELECT hid, bid, jino
+  // FROM ahdbrunch
+  // WHERE (hid, bid, date) IN (
+  //   SELECT hid, bid, MAX(date) as max_date
+  //   FROM ahdbrunch
+  //   GROUP BY hid, bid
+  // )
+  // AND jino = '$jino';
   $sql = "
-    SELECT hid, bid, jino
+    SELECT hid, bid, jino, date
     FROM ahdbrunch
-    WHERE (hid, bid, date) IN (
-      SELECT hid, bid, MAX(date) as max_date
-      FROM ahdbrunch
-      GROUP BY hid, bid
-    )
-    AND jino = '$jino';
+    WHERE jino = '$jino'
+    ORDER BY date DESC
+    LIMIT 1;
   ";
   $rt = unvList($mysqli, $sql);
   $sqla[] = $sql;
@@ -1458,14 +1504,11 @@ function fetchPartOfContactJino(){
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
   $sql = "
-    SELECT hid, bid, jino
+    SELECT hid, bid, jino, date
     FROM ahdbrunch
-    WHERE (hid, bid, date) IN (
-      SELECT hid, bid, MAX(date) as max_date
-      FROM ahdbrunch
-      GROUP BY hid, bid
-    )
-    AND jino = '$jino';
+    WHERE jino = '$jino'
+    ORDER BY date DESC
+    LIMIT 1;
   ";
   $rt = unvList($mysqli, $sql);
   $sqla[] = $sql;
@@ -1484,6 +1527,18 @@ function fetchPartOfContactJino(){
     $mysqli->close();    
     return false;
   }
+  if (count($rt['dt']) === 0){
+    $errobj = [
+      'result' => false,
+      'msg' => "Can not found jino.",
+      'sqla' => $sqla
+    ];
+    echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+  
   // mail, uid, faptalkenの認証を行う
   $sql = "
     SELECT a.hid, a.bid, a.uid, a.date, a.faptoken, a.pmail
@@ -1510,6 +1565,33 @@ function fetchPartOfContactJino(){
     $mysqli->close();    
     return false;
   }
+  // if (count($rt['dt']) === 1){
+  //   $hid = $rt['dt'][0]['hid'];
+  //   $bid = $rt['dt'][0]['bid'];
+  // }
+  // if (count($rt['dt']) > 1){
+  //   $errobj = [
+  //     'result' => false,
+  //     'msg' => "Data cannot be identified because there are multiple user.",
+  //     'sqla' => $sqla
+  //   ];
+  //   echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+  //   $mysqli->rollback();
+  //   $mysqli->close();    
+  //   return false;
+  // }
+  if (count($rt['dt']) === 0){
+    $errobj = [
+      'result' => false,
+      'msg' => "not found user. by fap token",
+      'sqla' => $sqla
+    ];
+    echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+    $mysqli->rollback();
+    $mysqli->close();    
+    return false;
+  }
+
   // contactsを取得する
   $sql = "
     select contacts from ahdcontacts 
@@ -1519,6 +1601,7 @@ function fetchPartOfContactJino(){
     FOR UPDATE;
   ";
   $rt = unvList($mysqli, $sql);
+  $sqla[] = $sql;
   if (count($rt['dt'])){
     $t = $rt['dt'][0]['contacts'];
   }
@@ -1533,7 +1616,6 @@ function fetchPartOfContactJino(){
     $mysqli->close();    
     return false;
   }
-  $sqla[] = $sql;
   $preCon = json_decode(escapeChar($t), true);
   $UID = 'UID'. $uid;
   if (isset($preCon[$UID]) && is_array($preCon[$UID]) && isset($preCon[$UID]['ctoken'])){
@@ -4631,16 +4713,29 @@ function sendPartOfDailyReportWithKey(){
   $date = PRMS('date');
   $partOfRpt = PRMS('partOfRpt');
   $key1 = PRMS('key1');
-  
+
+  // パラメータのエラーチェック
+  if (empty($hid)) {
+    echo json_encode(['result' => false, 'error' => 'hid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
+  if (empty($bid)) {
+    echo json_encode(['result' => false, 'error' => 'bid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
+  if ($hid === $bid) {
+    echo json_encode(['result' => false, 'error' => 'hid and bid must not be the same'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
   
   $sql = "
-    select dailyreport from ahddailyreport 
-    where hid='$hid'
-    and bid='$bid'
-    and date='$date'
-    FOR UPDATE;
+    SELECT dailyreport FROM ahddailyreport 
+    WHERE hid='$hid' AND bid='$bid' AND date='$date' FOR UPDATE;
   ";
   
   $rt = unvList($mysqli, $sql);
@@ -4690,9 +4785,9 @@ function sendPartOfDailyReportWithKey(){
   $finalJson = mysqli_real_escape_string($mysqli, $finalJson);
 
   $sql = "
-    insert into ahddailyreport (hid, bid, date, dailyreport)
-    values ('$hid', '$bid', '$date', '$finalJson')
-    on duplicate key update
+    INSERT INTO ahddailyreport (hid, bid, date, dailyreport)
+    VALUES ('$hid', '$bid', '$date', '$finalJson')
+    ON DUPLICATE KEY UPDATE
     dailyreport = '$finalJson'
   ";
   
@@ -4713,16 +4808,29 @@ function sendPartOfDailyReportWith2Key(){
   $key1 = PRMS('key1');
   $key2 = PRMS('key2');
   $partOfRpt = PRMS('partOfRpt');
-  
+
+  // パラメータのエラーチェック
+  if (empty($hid)) {
+    echo json_encode(['result' => false, 'error' => 'hid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
+  if (empty($bid)) {
+    echo json_encode(['result' => false, 'error' => 'bid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
+  if ($hid === $bid) {
+    echo json_encode(['result' => false, 'error' => 'hid and bid must not be the same'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return false;
+  }
+
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
   
   $sql = "
-    select dailyreport from ahddailyreport 
-    where hid='$hid'
-    and bid='$bid'
-    and date='$date'
-    FOR UPDATE;
+    SELECT dailyreport FROM ahddailyreport 
+    WHERE hid='$hid' AND bid='$bid' AND date='$date' FOR UPDATE;
   ";
   
   $rt = unvList($mysqli, $sql);
@@ -4777,9 +4885,9 @@ function sendPartOfDailyReportWith2Key(){
   $finalJson = mysqli_real_escape_string($mysqli, $finalJson);
 
   $sql = "
-    insert into ahddailyreport (hid, bid, date, dailyreport)
-    values ('$hid', '$bid', '$date', '$finalJson')
-    on duplicate key update
+    INSERT INTO ahddailyreport (hid, bid, date, dailyreport)
+    VALUES ('$hid', '$bid', '$date', '$finalJson')
+    ON DUPLICATE KEY UPDATE
     dailyreport = '$finalJson'
   ";
   
@@ -4792,6 +4900,7 @@ function sendPartOfDailyReportWith2Key(){
   $mysqli->close();
   echo json_encode($rt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
+
 
 
 
@@ -5114,6 +5223,13 @@ function fetchWaitingMsg(){
   $mysqli = connectDb();
   $result = unvList($mysqli, $sql);
 
+  // unvListの結果がfalseの場合、そのまま返す
+  if (!$result['result']) {
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    $mysqli->close();
+    return;
+  }
+
   // 今日の日付をJSTで取得
   $today = new DateTime('now', new DateTimeZone('Asia/Tokyo'));
   $todayStr = $today->format('Ymd');
@@ -5169,10 +5285,11 @@ function fetchWaitingMsg(){
     }
   }
 
-  $jsn = json_encode($filteredData, JSON_UNESCAPED_UNICODE);
-  echo $jsn;
+  $result['dt'] = $filteredData;
+  echo json_encode($result, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
+
 
 
 

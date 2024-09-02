@@ -232,7 +232,7 @@ function unvMultiEdit($mysqli, $sql){
 }
 
 function zip(){
-  $postal = PRMS('postal');
+  $postal = PRMS('postal', true);
   $url = "https://zipcloud.ibsnet.co.jp/api/search?zipcode=" . $postal;
   $json = file_get_contents($url);
   $json = mb_convert_encoding($json, 'UTF8', 'ASCII,JIS,UTF-8,EUC-JP,SJIS-WIN');
@@ -1565,21 +1565,21 @@ function fetchPartOfContactJino(){
     $mysqli->close();    
     return false;
   }
-  if (count($rt['dt']) === 1){
-    $hid = $rt['dt'][0]['hid'];
-    $bid = $rt['dt'][0]['bid'];
-  }
-  if (count($rt['dt']) > 1){
-    $errobj = [
-      'result' => false,
-      'msg' => "Data cannot be identified because there are multiple user.",
-      'sqla' => $sqla
-    ];
-    echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
-    $mysqli->rollback();
-    $mysqli->close();    
-    return false;
-  }
+  // if (count($rt['dt']) === 1){
+  //   $hid = $rt['dt'][0]['hid'];
+  //   $bid = $rt['dt'][0]['bid'];
+  // }
+  // if (count($rt['dt']) > 1){
+  //   $errobj = [
+  //     'result' => false,
+  //     'msg' => "Data cannot be identified because there are multiple user.",
+  //     'sqla' => $sqla
+  //   ];
+  //   echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+  //   $mysqli->rollback();
+  //   $mysqli->close();    
+  //   return false;
+  // }
   if (count($rt['dt']) === 0){
     $errobj = [
       'result' => false,
