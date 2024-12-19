@@ -1,40 +1,34 @@
 <?php
 error_reporting(E_ALL);
 header("Access-Control-Allow-Origin: *");
-// header("Access-Control-Allow-Origin: http://localhost:3000");
-// header("Access-Control-Allow-Origin: https://seagull-fukushi.com");
 header('Access-Control-Allow-Headers: Content-Type');
 header("Access-Control-Allow-Methods: POST, GET");
-// header("Access-Control-Allow-Methods: POST");
-// header("Access-Control-Allow-Headers: Origin, X-Requested-With");
 define ("SLEEP", 0); // テスト用遅延時間
-
-// $reqHeaders = apache_request_headers(); 
-// $allowedOrigin = array(
-//   'http://localhost:3000',
-//   'https://seagull-fukushi.com',
-// );
- 
-// if (in_array($reqHeaders['Origin'], $allowedOrigin)){
-//   header("Access-Control-Allow-Origin: {$reqHeaders['Origin']}");
-// }
 
 $self = basename(__FILE__);
 
-if ($self !== 'api.php'){
+if ($self === 'api.php'){
+  // 本番用
+  $allowGet = false;
+  $returnSql = false;
+  define ("DBNAME", "albatross56_sv1"); // 本番用
+  $fscgi = 'fs_cgi.py'; // 本番用
+}
+else if ($self === 'apidev.php'){
+  // テスト用
+  $allowGet = true;
+  $returnSql = true;
+  define ("DBNAME", "albatross56_albtest"); // テスト用
+  // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
+  $fscgi = 'y_fs_cgi.py'; // 運用テスト用
+}
+else{
   // テスト用
   $allowGet = true;
   $returnSql = true;
   // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
   define ("DBNAME", "albatross56_albtest"); // テスト用
   $fscgi = 'y_fs_cgi.py'; // 運用テスト用
-}
-else{
-  // 本番用
-  $allowGet = false;
-  $returnSql = false;
-  define ("DBNAME", "albatross56_sv1"); // 本番用
-  $fscgi = 'fs_cgi.py'; // 本番用
 }
 if ($self === 'apixfg.php'){
   $returnSql = false;
@@ -60,6 +54,17 @@ function escapeChar($str){
   $cnv = str_replace(["\r\n", "\r", "\n", "\\n"], "<br>", $str);
   $cnv = str_replace(["%0A"], "<br>", $str);
   return $cnv;
+}
+
+function recursiveMerge($array1, $array2) {
+  foreach ($array2 as $key => $value) {
+    if (array_key_exists($key, $array1) && is_array($array1[$key]) && is_array($value)) {
+      $array1[$key] = recursiveMerge($array1[$key], $value);
+    } else {
+      $array1[$key] = $value;
+    }
+  }
+  return $array1;
 }
 
 // 使用状況により切り替えるため
@@ -680,12 +685,10 @@ function sendPartOfSchedule(){
     and date='$date'
     FOR UPDATE;
   ";
-  // // $schedule = '{"D20210701":{"end":"18:30","start":"13:40","service":"放課後等デイサービス","transfer":["自宅","自宅"],"offSchool":0,"actualCost":{"おやつ":100}},"D20210703":{"end":"17:00","start":"13:30","service":"放課後等デイサービス","transfer":["学校","自宅"],"offSchool":0,"actualCost":{"おやつ":100}}}';
-  // echo ('preSch<br>');
   $rt = unvList($mysqli, $sql);
   $preSch = $rt['dt'][0]['schedule'];
   if (!$preSch){
-    echo '{"result":false}';
+    echo '{"result":false, "error": "not exist predata"}';
     $mysqli->rollback();
     $mysqli->close();    
     return false;
@@ -5290,6 +5293,246 @@ function fetchWaitingMsg(){
   $mysqli->close();
 }
 
+function sendPartOfData() {
+  $table = PRMS('table');
+  $column = PRMS('column');
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $partOfData = PRMS('partOfData');
+
+  $mysqli = connectDb();
+  $mysqli->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
+
+  try {
+      $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+
+      // テーブル名とカラム名をバッククォートで囲む
+      $sql = "
+          SELECT `$column` FROM `$table`
+          WHERE hid = ? AND bid = ? AND date = ?
+          FOR UPDATE
+      ";
+      $stmt = $mysqli->prepare($sql);
+      if (!$stmt) {
+          echo '{"result":false, "error": "SQL Prepare failed: ' . $mysqli->error . '"}';
+          return false;
+      }
+
+      $stmt->bind_param("sss", $hid, $bid, $date);
+      $stmt->execute();
+      $result = $stmt->get_result();
+      $existingData = $result->fetch_assoc()[$column] ?? null;
+
+      if (!$existingData) {
+          echo '{"result":false, "error": "Exist data not found."}';
+          $mysqli->rollback();
+          $stmt->close();
+          $mysqli->close();
+          return false;
+      }
+
+      // JSON デコードとエラーチェック
+      $existingData = json_decode($existingData, true);
+      if (json_last_error() !== JSON_ERROR_NONE) {
+          error_log("JSON Decode Error (existingData): " . json_last_error_msg());
+          echo '{"result":false, "error": "Invalid existingData JSON"}';
+          $mysqli->rollback();
+          $stmt->close();
+          $mysqli->close();
+          return false;
+      }
+
+      $partialData = json_decode($partOfData, true);
+      if (json_last_error() !== JSON_ERROR_NONE) {
+          error_log("JSON Decode Error (partOfData): " . json_last_error_msg());
+          echo '{"result":false, "error": "Invalid partOfData JSON"}';
+          $mysqli->rollback();
+          $stmt->close();
+          $mysqli->close();
+          return false;
+      }
+
+      // データをマージ
+      $mergedData = recursiveMerge($existingData, $partialData);
+
+      // JSON エンコードとエラーチェック
+      $finalJson = json_encode($mergedData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+      if (json_last_error() !== JSON_ERROR_NONE) {
+          error_log("JSON Encode Error: " . json_last_error_msg());
+          echo '{"result":false, "error": "JSON encoding failed"}';
+          $mysqli->rollback();
+          $stmt->close();
+          $mysqli->close();
+          return false;
+      }
+
+      // プリペアドステートメントで安全な INSERT 文
+      $updateStmt = $mysqli->prepare("
+          INSERT INTO `$table` (hid, bid, date, `$column`)
+          VALUES (?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE `$column` = VALUES(`$column`)
+      ");
+      if (!$updateStmt) {
+          echo '{"result":false, "error": "SQL Prepare failed (update): ' . $mysqli->error . '"}';
+          return false;
+      }
+
+      $updateStmt->bind_param("ssss", $hid, $bid, $date, $finalJson);
+      $updateResult = $updateStmt->execute();
+
+      if ($updateResult) {
+          $mysqli->commit();
+          echo '{"result":true}';
+      } else {
+          error_log("SQL Error (update): " . $updateStmt->error);
+          $mysqli->rollback();
+          echo '{"result":false, "error": "Database update failed"}';
+      }
+
+      $stmt->close();
+      $updateStmt->close();
+      $mysqli->close();
+  } catch (Exception $e) {
+      error_log("Transaction failed: " . $e->getMessage());
+      $mysqli->rollback();
+      $mysqli->close();
+      echo '{"result":false, "error": "Transaction failed"}';
+  }
+}
+
+function deletePartOfData() {
+  $table = PRMS('table');
+  $column = PRMS('column');
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $keyToDelete = json_decode(PRMS('keyToDelete'), true); // JSON デコード
+
+  if (json_last_error() !== JSON_ERROR_NONE) {
+      echo '{"result":false, "error": "Invalid keyToDelete format"}';
+      return false;
+  }
+
+  $mysqli = connectDb();
+  $mysqli->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
+
+  try {
+      $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+
+      // SELECT 文で現在のデータを取得
+      $sql = "
+          SELECT `$column` FROM `$table`
+          WHERE hid = ? AND bid = ? AND date = ?
+          FOR UPDATE
+      ";
+      $stmt = $mysqli->prepare($sql);
+      if (!$stmt) {
+          echo '{"result":false, "error": "SQL Prepare failed: ' . $mysqli->error . '"}';
+          return false;
+      }
+
+      $stmt->bind_param("sss", $hid, $bid, $date);
+      $stmt->execute();
+      $result = $stmt->get_result();
+      $existingData = $result->fetch_assoc()[$column] ?? null;
+
+      if (!$existingData) {
+          echo '{"result":false, "message": "No data found for the specified record."}';
+          $mysqli->rollback();
+          $stmt->close();
+          $mysqli->close();
+          return false;
+      }
+
+      $existingData = json_decode($existingData, true);
+      if (json_last_error() !== JSON_ERROR_NONE) {
+          error_log("JSON Decode Error: " . json_last_error_msg());
+          echo '{"result":false, "error": "Invalid existingData JSON"}';
+          $mysqli->rollback();
+          $stmt->close();
+          $mysqli->close();
+          return false;
+      }
+
+      // JSON 内のキーを削除
+      $current = &$existingData;
+      $lastKey = array_pop($keyToDelete); // 削除対象の最終キー
+      foreach ($keyToDelete as $key) {
+          if (!isset($current[$key]) || !is_array($current[$key])) {
+              echo '{"result":false, "message": "No matching key found"}';
+              $mysqli->rollback();
+              $stmt->close();
+              $mysqli->close();
+              return false;
+          }
+          $current = &$current[$key];
+      }
+
+      // 最終キーを削除
+      if (isset($current[$lastKey])) {
+          $deletedValue = $current[$lastKey];
+          unset($current[$lastKey]);
+
+          // 空の配列やオブジェクトを削除
+          $current = array_filter($current, function ($value) {
+              return !empty($value);
+          });
+      } else {
+          echo '{"result":false, "message": "No matching key found"}';
+          $mysqli->rollback();
+          $stmt->close();
+          $mysqli->close();
+          return false;
+      }
+
+      // 更新後のデータを JSON にエンコード
+      $finalJson = json_encode($existingData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+      if (json_last_error() !== JSON_ERROR_NONE) {
+          error_log("JSON Encode Error: " . json_last_error_msg());
+          echo '{"result":false, "error": "JSON encoding failed"}';
+          $mysqli->rollback();
+          $stmt->close();
+          $mysqli->close();
+          return false;
+      }
+
+      // UPDATE 文でデータを更新
+      $updateStmt = $mysqli->prepare("
+          UPDATE `$table`
+          SET `$column` = ?
+          WHERE hid = ? AND bid = ? AND date = ?
+      ");
+      if (!$updateStmt) {
+          echo '{"result":false, "error": "SQL Prepare failed (update): ' . $mysqli->error . '"}';
+          return false;
+      }
+
+      $updateStmt->bind_param("ssss", $finalJson, $hid, $bid, $date);
+      $updateResult = $updateStmt->execute();
+
+      if ($updateResult) {
+          $mysqli->commit();
+          echo json_encode([
+              "result" => true,
+              "deleted" => ["key" => array_merge($keyToDelete, [$lastKey]), "value" => $deletedValue]
+          ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+      } else {
+          error_log("SQL Error (update): " . $updateStmt->error);
+          $mysqli->rollback();
+          echo '{"result":false, "error": "Database update failed"}';
+      }
+
+      $stmt->close();
+      $updateStmt->close();
+      $mysqli->close();
+  } catch (Exception $e) {
+      error_log("Transaction failed: " . $e->getMessage());
+      $mysqli->rollback();
+      $mysqli->close();
+      echo '{"result":false, "error": "Transaction failed"}';
+  }
+}
 
 
 
@@ -5307,6 +5550,7 @@ function nothing(){
 
 $m = PRMS('a', true);
 if ($m == 'zip')  zip();
+
 else if ($m == 'listusers')           listUsers();
 else if ($m == 'lu')                  listUsers();
 // ユーザー一覧の取得
@@ -5470,11 +5714,15 @@ else if ($m == 'fetchHidBidByJino') fetchHidBidByJino();
 else if ($m == 'fetchTimeStamps') fetchTimeStamps();
 // ユニークなbidの取得
 else if ($m == 'fetchUniqBids') fetchUniqBids();
+
 // 個別支援計画
 else if ($m == 'fetchUsersPlan') fetchUsersPlan();
 else if ($m == 'sendUsersPlan') sendUsersPlan();
 else if ($m == 'deleteUsersPlan') deleteUsersPlan();
 else if ($m == 'sendLog') sendLog();
+// 汎用JSOM更新
+else if ($m == 'sendPartOfData') sendPartOfData();
+else if ($m == 'deletePartOfData') deletePartOfData();
 
 
 
