@@ -28,21 +28,21 @@ header("Access-Control-Allow-Methods: POST, GET");
 function correctImageRotation(&$sourceImage, $source) {
     $exif = exif_read_data($source);
     if (!empty($exif['Orientation'])) {
-      switch ($exif['Orientation']) {
+        switch ($exif['Orientation']) {
         case 3:
-          $sourceImage = imagerotate($sourceImage, 180, 0);
-          break;
+            $sourceImage = imagerotate($sourceImage, 180, 0);
+            break;
         case 6:
-          $sourceImage = imagerotate($sourceImage, -90, 0);
-          break;
+            $sourceImage = imagerotate($sourceImage, -90, 0);
+            break;
         case 8:
-          $sourceImage = imagerotate($sourceImage, 90, 0);
-          break;
-      }
+            $sourceImage = imagerotate($sourceImage, 90, 0);
+            break;
+        }
     }
-  }
+}
   
-  function resizeImage($source, $destination, $newSize) {
+function resizeImage($source, $destination, $newSize) {
     $imageType = exif_imagetype($source);
     if ($imageType == IMAGETYPE_JPEG) {
         $sourceImage = imagecreatefromjpeg($source);
@@ -51,14 +51,14 @@ function correctImageRotation(&$sourceImage, $source) {
     } else {
         return false; // Unsupported image format
     }
-  
+
     // Correct the image rotation before resampling
     correctImageRotation($sourceImage, $source);
-  
+
     $width = imagesx($sourceImage);
     $height = imagesy($sourceImage);
     $ratio = $height / $width;
-  
+
     if ($width > $height) {
         $newWidth = $newSize;
         $newHeight = $newSize * $ratio;
@@ -66,20 +66,20 @@ function correctImageRotation(&$sourceImage, $source) {
         $newWidth = $newSize / $ratio;
         $newHeight = $newSize;
     }
-  
+
     $resizedImage = imagecreatetruecolor($newWidth, $newHeight);
     imagecopyresampled($resizedImage, $sourceImage, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-  
+
     if ($imageType == IMAGETYPE_JPEG) {
         imagejpeg($resizedImage, $destination, 90);
     } elseif ($imageType == IMAGETYPE_PNG) {
         imagepng($resizedImage, $destination);
     }
-  
+
     imagedestroy($sourceImage);
     imagedestroy($resizedImage);
     return true;
-  }
+}
 
   
 $tempfile = $_FILES['file']['tmp_name'];

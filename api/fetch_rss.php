@@ -9,7 +9,8 @@ $textRemovePhrases = [
 
 // 除外する画像URL（`img`内でこのリストに含まれる画像URLは削除）
 $excludeImgUrls = [
-    "https://rbatos.com/lp/wp-content/uploads/2024/11/d2fda9acddb72967f00bee31f70eee3f.png"
+    "https://rbatos.com/lp/wp-content/uploads/2024/11/d2fda9acddb72967f00bee31f70eee3f.png",
+    "https://rbatos.com/lp/wp-content/uploads/2024/12/ab238924293dbf10691a31ade91d3028-1-1024x189.png"
 ];
 
 // カテゴリごとのRSSフィードのURL

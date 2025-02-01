@@ -20,7 +20,7 @@ if ($mysqli->connect_error) {
 }
 
 $N = 60; // N分
-$X = 6;  // Xレコード上限
+$X = 24;  // Xレコード上限
 $sqls = array();
 
 // `ahdschedule`から最新のN分のレコードを`ahdschedule_backup`にコピー

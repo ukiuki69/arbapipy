@@ -3,39 +3,37 @@ error_reporting(E_ALL);
 header("Access-Control-Allow-Origin: *");
 header('Access-Control-Allow-Headers: Content-Type');
 header("Access-Control-Allow-Methods: POST, GET");
-define ("SLEEP", 0); // テスト用遅延時間
+define("SLEEP", 0); // テスト用遅延時間
 
 $self = basename(__FILE__);
 
-if ($self === 'api.php'){
+if ($self === 'api.php') {
   // 本番用
   $allowGet = false;
   $returnSql = false;
-  define ("DBNAME", "albatross56_sv1"); // 本番用
+  define("DBNAME", "albatross56_sv1"); // 本番用
   $fscgi = 'fs_cgi.py'; // 本番用
-}
-else if ($self === 'apidev.php'){
+} else if ($self === 'apidev.php') {
   // テスト用
   $allowGet = true;
   $returnSql = true;
-  define ("DBNAME", "albatross56_albtest"); // テスト用
+  define("DBNAME", "albatross56_albtest"); // テスト用
   // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
   $fscgi = 'y_fs_cgi.py'; // 運用テスト用
-}
-else{
+} else {
   // テスト用
   $allowGet = true;
   $returnSql = true;
   // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
-  define ("DBNAME", "albatross56_albtest"); // テスト用
+  define("DBNAME", "albatross56_albtest"); // テスト用
   $fscgi = 'y_fs_cgi.py'; // 運用テスト用
 }
-if ($self === 'apixfg.php'){
+if ($self === 'apixfg.php') {
   $returnSql = false;
 }
 
 
-define ("DBNAMEREAL", "albatross56_sv1"); // 本番用
+define("DBNAMEREAL", "albatross56_sv1"); // 本番用
 
 // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
 
@@ -50,54 +48,66 @@ $cgiAdrress = 'https://rbatosdata.com';
 
 
 // キャラクターをエスケープする
-function escapeChar($str){
+function escapeChar($str)
+{
   $cnv = str_replace(["\r\n", "\r", "\n", "\\n"], "<br>", $str);
   $cnv = str_replace(["%0A"], "<br>", $str);
   return $cnv;
 }
 
-function recursiveMerge($array1, $array2) {
-  foreach ($array2 as $key => $value) {
-    if (array_key_exists($key, $array1) && is_array($array1[$key]) && is_array($value)) {
-      $array1[$key] = recursiveMerge($array1[$key], $value);
-    } else {
-      $array1[$key] = $value;
+function recursiveMerge(array $array1, array $array2, int $limit = 2, int $currentDepth = 1)
+{
+    foreach ($array2 as $key => $value) {
+        // まだ再帰可能かつ両方配列なら再帰を継続
+        if ($currentDepth < $limit
+            && array_key_exists($key, $array1)
+            && is_array($array1[$key])
+            && is_array($value)
+        ) {
+            $array1[$key] = recursiveMerge(
+                $array1[$key],
+                $value,
+                $limit,
+                $currentDepth + 1
+            );
+        } else {
+            // それ以外は上書きする
+            $array1[$key] = $value;
+        }
     }
-  }
-  return $array1;
+    return $array1;
 }
-
 // 使用状況により切り替えるため
-function PRMS($key, $prmsAllowGet = false){
+function PRMS($key, $prmsAllowGet = false)
+{
   global $allowGet;
   // return($_REQUEST[$key]);
   // return($_POST[$key]);
   // $_REQUESTはクッキーまで拾うのでめんどくさい
   $localAllowGet = $allowGet;
-  if ($prmsAllowGet){
+  if ($prmsAllowGet) {
     $localAllowGet = $prmsAllowGet;
   }
-  if (count($_GET) && $localAllowGet){
-    if (array_key_exists($key, $_GET)){
-      return($_GET[$key]);
-    }
-    else return('');
-  }
-  else{
-    if (array_key_exists($key, $_POST)){
-      return($_POST[$key]);
-    }
-    else return('');
+  if (count($_GET) && $localAllowGet) {
+    if (array_key_exists($key, $_GET)) {
+      return ($_GET[$key]);
+    } else return ('');
+  } else {
+    if (array_key_exists($key, $_POST)) {
+      return ($_POST[$key]);
+    } else return ('');
   }
 }
 
-function PRMS_ARRAY(){
+function PRMS_ARRAY()
+{
   // return($_REQUEST);
   // return($_POST);
-  return($_GET);
+  return ($_GET);
 }
 // 常に本番DBに接続
-function connectDbPrd(){
+function connectDbPrd()
+{
   $mysqli = new mysqli(
     'mysql10077.xserver.jp',
     'albatross56_ysmr',
@@ -110,19 +120,18 @@ function connectDbPrd(){
     $rt['msg'] = $mysqli->connect_error;
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
     exit();
-  }
-  else {
+  } else {
     $mysqli->set_charset("utf8");
   }
-  return($mysqli);
+  return ($mysqli);
 }
 
 
-function connectDb(){
-  if (PRMS('realdb')){
+function connectDb()
+{
+  if (PRMS('realdb')) {
     $dbname = DBNAMEREAL;
-  }
-  else{
+  } else {
     $dbname = DBNAME;
   }
   $mysqli = new mysqli(
@@ -138,17 +147,17 @@ function connectDb(){
     $rt['msg'] = $mysqli->connect_error;
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
     exit();
-  }
-  else {
+  } else {
     // $mysqli->set_charset("utf8");
     $mysqli->set_charset("utf8mb4");
   }
 
-  return($mysqli);
+  return ($mysqli);
 }
 
 // 汎用リストモジュール
-function unvList($mysqli, $sql){
+function unvList($mysqli, $sql)
+{
   global $returnSql;
   $sql = str_replace(array("\r\n", "\r", "\n"), ' ', $sql);
   $rt = [];
@@ -159,57 +168,57 @@ function unvList($mysqli, $sql){
       $dt[] = $row;
     }
     $rt['dt'] = $dt;
-  }
-  else{
+  } else {
     $rt['result'] = false;
   }
-  if($returnSql) $rt['sql'] = $sql;
-  return($rt);
+  if ($returnSql) $rt['sql'] = $sql;
+  return ($rt);
   // echo json_encode($rt, JSON_UNESCAPED_UNICODE);
 }
 
 // 汎用カウントモジュール
-function unvCnt($mysqli, $sql){
+function unvCnt($mysqli, $sql)
+{
   global $returnSql;
   $sql = str_replace(array("\r\n", "\r", "\n"), ' ', $sql);
   $rt = [];
   if ($result = $mysqli->query($sql)) {
     $rt['result'] = true;
     $rt['count'] = $result->num_rows;
-  }
-  else{
+  } else {
     $rt['result'] = false;
   }
-  if($returnSql) $rt['sql'] = $sql;
-  return($rt);
+  if ($returnSql) $rt['sql'] = $sql;
+  return ($rt);
   // echo json_encode($rt, JSON_UNESCAPED_UNICODE);
 }
 
 // 汎用修正モジュール
 // update insert delete
-function unvEdit($mysqli, $sql, $rtn = false){
+function unvEdit($mysqli, $sql, $rtn = false)
+{
   global $returnSql;
   $sql = str_replace(array("\r\n", "\r", "\n"), ' ', $sql);
   $rt = [];
   if ($result = $mysqli->query($sql)) {
     $rt['result'] = true;
     $rt['affected_rows'] = $mysqli->affected_rows;
-  }
-  else{
+  } else {
     $rt['result'] = false;
     $rt['error_no'] = $mysqli->connect_errno;
     $rt['error'] = $mysqli->connect_error;
   }
 
-  if($returnSql) $rt['sql'] = $sql;
-  return($rt);
+  if ($returnSql) $rt['sql'] = $sql;
+  return ($rt);
   // echo json_encode($rt, JSON_UNESCAPED_UNICODE);
 }
 // 汎用マルチ修正モジュール
 // update insert delete 複数sqlに対応
 // 戻り値でそれぞれの結果と実施した数を返す。
 // エラーが発生したらその分のsql文を返す
-function unvMultiEdit($mysqli, $sql){
+function unvMultiEdit($mysqli, $sql)
+{
   global $returnSql;
   $sqla = explode(';', $sql);
   $rt = [];
@@ -221,10 +230,9 @@ function unvMultiEdit($mysqli, $sql){
     do {
       /* 最初の結果セットを格納します */
       // if ($result = $mysqli->store_result()) {
-      if (!$mysqli->errno){
+      if (!$mysqli->errno) {
         $rt['resulttrue']++;
-      }
-      else{
+      } else {
         $rt['resultfalse']++;
         array_push($rt['errsql'], $sqla[$i]);
       }
@@ -232,18 +240,21 @@ function unvMultiEdit($mysqli, $sql){
     } while ($mysqli->next_result());
   }
   $rt['count'] = $i;
-  if($returnSql) $rt['sql'] = $sql;
-  return($rt);
+  if ($returnSql) $rt['sql'] = $sql;
+  return ($rt);
 }
 
-function zip(){
+function zip()
+{
   $postal = PRMS('postal', true);
   $url = "https://zipcloud.ibsnet.co.jp/api/search?zipcode=" . $postal;
   $json = file_get_contents($url);
   $json = mb_convert_encoding($json, 'UTF8', 'ASCII,JIS,UTF-8,EUC-JP,SJIS-WIN');
   $ary = json_decode($json, true);
-  if (is_null($ary['message']) && is_null($ary['results']) 
-  && $ary['status'] == 200){
+  if (
+    is_null($ary['message']) && is_null($ary['results'])
+    && $ary['status'] == 200
+  ) {
     $subp = substr($postal, 0, 3) . '0001';
     $url = "https://zipcloud.ibsnet.co.jp/api/search?zipcode=" . $subp;
     $json = file_get_contents($url);
@@ -256,7 +267,8 @@ function zip(){
   echo $json;
 }
 
-function extData(){
+function extData()
+{
   $url = PRMS('url', true);
   $r = file_get_contents($url);
   echo $r;
@@ -266,7 +278,8 @@ function extData(){
 // vpsのpythonをCGIとして起動する
 // python側でdbからドキュメントのデータを拾って
 // エクセルのファイルを作成する
-function excelgen(){
+function excelgen()
+{
   global $cgiAdrress;
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -279,13 +292,14 @@ function excelgen(){
   $url = htmlspecialchars_decode($url);
   // 2021/10/01追加 突然動かなくなった
   // https://qiita.com/izanari/items/f4f96e11a2b01af72846
-  $options['ssl']['verify_peer']=false;
-  $options['ssl']['verify_peer_name']=false;
+  $options['ssl']['verify_peer'] = false;
+  $options['ssl']['verify_peer_name'] = false;
   $json = file_get_contents($url, false, stream_context_create($options));
   echo $json;
 }
 
-function fsConCnvExcel(){
+function fsConCnvExcel()
+{
   global $cgiAdrress, $fscgi;
   $jino = PRMS('jino');
   $mail = PRMS('mail');
@@ -293,8 +307,8 @@ function fsConCnvExcel(){
   $a = 'cnvexcel';
   $url = $cgiAdrress . "/cgi/$fscgi?a=$a&jino=$jino&mail=$mail&date=$date";
   $url = htmlspecialchars_decode($url);
-  $options['ssl']['verify_peer']=false;
-  $options['ssl']['verify_peer_name']=false;
+  $options['ssl']['verify_peer'] = false;
+  $options['ssl']['verify_peer_name'] = false;
   // echo $url;
   $json = file_get_contents($url, false, stream_context_create($options));
   echo $json;
@@ -304,29 +318,30 @@ function fsConCnvExcel(){
 // vpsのpythonをCGIとして起動する
 // python側でdbからドキュメントのデータを拾って
 // csvのファイルを作成する
-function csvgen(){
+function csvgen()
+{
   global $cgiAdrress;
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
   $rnddir = PRMS('rnddir');
   $prefix = PRMS('prefix');
-  $url = 
-    $cgiAdrress . "/py/csvgen.py?" . 
+  $url =
+    $cgiAdrress . "/py/csvgen.py?" .
     "hid=$hid&bid=$bid&date=$date&rnddir=$rnddir&prefix=$prefix";
   $url = htmlspecialchars_decode($url);
 
   // 2021/10/01追加 突然動かなくなった
   // https://qiita.com/izanari/items/f4f96e11a2b01af72846
-  $options['ssl']['verify_peer']=false;
-  $options['ssl']['verify_peer_name']=false;
+  $options['ssl']['verify_peer'] = false;
+  $options['ssl']['verify_peer_name'] = false;
   $json = file_get_contents($url, false, stream_context_create($options));
   echo $json;
-
 }
 
 // genFKdatasのラッパー
-function genFKdatas(){
+function genFKdatas()
+{
   global $cgiAdrress;
   $jino = PRMS('jino');
   $date = PRMS('date');
@@ -336,14 +351,14 @@ function genFKdatas(){
   $encode = PRMS('encode');
   $target = PRMS('target');
   $item = PRMS('item');
-  $url = 
-    $cgiAdrress . "/py/genFKdatas.py?" . 
-    "jino=$jino&date=$date&item=$item&rnddir=$rnddir&prefix=$prefix" . 
+  $url =
+    $cgiAdrress . "/py/genFKdatas.py?" .
+    "jino=$jino&date=$date&item=$item&rnddir=$rnddir&prefix=$prefix" .
     "&format=$format&encode=$encode&target=$target";
   $url = htmlspecialchars_decode($url);
 
-  $options['ssl']['verify_peer']=false;
-  $options['ssl']['verify_peer_name']=false;
+  $options['ssl']['verify_peer'] = false;
+  $options['ssl']['verify_peer_name'] = false;
   $json = file_get_contents($url, false, stream_context_create($options));
   echo $json;
 }
@@ -351,13 +366,14 @@ function genFKdatas(){
 
 
 // 複数レコード対応用
-function companybrunchM(){
+function companybrunchM()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
 
-    // com.confirmPayment,
+  // com.confirmPayment,
   $sql = "
     select brunch.*, 
     com.hname, com.shname, com.postal cpostal, com.city ccity,
@@ -383,7 +399,8 @@ function companybrunchM(){
   $mysqli->close();
 }
 
-function companyAndBrunch(){
+function companyAndBrunch()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -408,29 +425,27 @@ function companyAndBrunch(){
 
 // brunchに日付の項目を追加したのでユーザーデータが複数回帰ってくる。
 // それを抑制した。2021/08/09
-function listUsers(){
+function listUsers()
+{
   $typeA = ['障害児', '重症心身障害児'];
   $serviceA = ['放課後等デイサービス', '児童発達支援'];
 
   $mysqli = connectDb();
-  if (array_key_exists('limit', $_REQUEST)){
+  if (array_key_exists('limit', $_REQUEST)) {
     $limit = ' limit 0,' . PRMS('limit');
-  }
-  else{
+  } else {
     $limit = '';
   }
-  if (array_key_exists('type', $_REQUEST)){
+  if (array_key_exists('type', $_REQUEST)) {
     $str = $typeA[(int) PRMS('type')];
     $wtype = " user.type = '$str'";
-  }
-  else{
+  } else {
     $wtype = 'true ';
   }
-  if (array_key_exists('service', $_REQUEST)){
+  if (array_key_exists('service', $_REQUEST)) {
     $str = $serviceA[(int) PRMS('service')];
     $wservice = " user.service = '$str'";
-  }
-  else{
+  } else {
     $wservice = ' true';
   }
   $hid = PRMS('hid');
@@ -475,21 +490,21 @@ function listUsers(){
   ";
   $rt = unvList($mysqli, $sql);
   // $rt['dt'][0]['etc'] = json_decode($rt['dt'][0]['etc']);
-  foreach($rt['dt'] as &$val){
+  foreach ($rt['dt'] as &$val) {
     $val['etc'] = json_decode($val['etc']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
 // 廃止予定 sendBrunchに統合
-function sendAddictionOfBrunch(){
+function sendAddictionOfBrunch()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $addiction = PRMS('addiction');
-  if ($addiction == ''){
+  if ($addiction == '') {
     $adcStr = 'NULL';
-  }
-  else{
+  } else {
     $adcStr = "'" . $addiction . "'";
   }
   $mysqli = connectDb();
@@ -504,7 +519,8 @@ function sendAddictionOfBrunch(){
   $mysqli->close();
 }
 
-function fetchAddictionOfBrunch(){
+function fetchAddictionOfBrunch()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $sql = "
@@ -515,7 +531,7 @@ function fetchAddictionOfBrunch(){
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $rt['dt'][0]['addiction'] = json_decode($rt['dt'][0]['addiction']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -524,7 +540,8 @@ function fetchAddictionOfBrunch(){
 
 
 
-function sendCalender(){
+function sendCalender()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -541,7 +558,8 @@ function sendCalender(){
   $mysqli->close();
 }
 
-function fetchCalender(){
+function fetchCalender()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -554,14 +572,15 @@ function fetchCalender(){
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $rt['dt'][0]['dateList'] = json_decode($rt['dt'][0]['dateList']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
 
-function sendSchedule(){
+function sendSchedule()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -578,7 +597,8 @@ function sendSchedule(){
   $mysqli->close();
 }
 
-function sendWorkshift(){
+function sendWorkshift()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -596,13 +616,14 @@ function sendWorkshift(){
 }
 
 
-function sendUsersSchedule(){
+function sendUsersSchedule()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
   $uid = PRMS('uid'); // UIDxx形式
   $schedule = PRMS('schedule');
-  
+
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
   $sql1 = "
@@ -630,16 +651,15 @@ function sendUsersSchedule(){
   // var_dump($sch);
   // echo('<br><br>');
   // echo ('merged<br>');
-  if (is_array($preSch) && is_array($usersSch)){
+  if (is_array($preSch) && is_array($usersSch)) {
     $merged = array_merge($preSch, $sch);
-  }
-  else{
+  } else {
     $errRt['result'] = false;
     $errRt['usersSch'] = $usersSch;
     $errRt['preSch'] = $preSch;
     echo json_encode($errRt, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -659,19 +679,19 @@ function sendUsersSchedule(){
     on duplicate key update
     schedule = '$finalJson'
   ";
-  
+
   $rt = unvEdit($mysqli, $sql);
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
 // キーが与えられたスケジュール項目だけ
-function sendPartOfSchedule(){
+function sendPartOfSchedule()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -687,17 +707,17 @@ function sendPartOfSchedule(){
   ";
   $rt = unvList($mysqli, $sql);
   $preSch = $rt['dt'][0]['schedule'];
-  if (!$preSch){
+  if (!$preSch) {
     echo '{"result":false, "error": "not exist predata"}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   $preSch = json_decode($preSch, true);
   if (json_last_error() !== JSON_ERROR_NONE) {
     echo '{"result":false, "error": "Invalid preSch JSON"}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -705,26 +725,25 @@ function sendPartOfSchedule(){
   if (json_last_error() !== JSON_ERROR_NONE) {
     echo '{"result":false, "error": "Invalid partOfSch JSON"}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
   // ロック確認のために待機
   // sleep(SLEEP);
   // マージする配列があるかどうか確認
-  if (is_array($preSch) && is_array($partOfSch)){
+  if (is_array($preSch) && is_array($partOfSch)) {
     $merged = array_merge($preSch, $partOfSch);
-  }
-  else{
+  } else {
     echo '{"result":false}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   // var_dump($merged);
   // echo('<br><br>');
   // echo ('final json<br>');
-  $finalJson = json_encode($merged, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  $finalJson = json_encode($merged, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   $finalJson = escapeChar($finalJson);
   $finalJson = mysqli_real_escape_string($mysqli, $finalJson);
 
@@ -738,16 +757,15 @@ function sendPartOfSchedule(){
     on duplicate key update
     schedule = '$finalJson'
   ";
-  
+
   $rt = unvEdit($mysqli, $sql);
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $mysqli->close();
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
 
@@ -756,7 +774,8 @@ function sendPartOfSchedule(){
 // hid, bidは上6桁のマッチでokとするが該当する事業所内にメールアドレスが
 // 存在しない場合はエラーとする
 
-function sendPartOfContact(){
+function sendPartOfContact()
+{
   global $returnSql;
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -774,10 +793,10 @@ function sendPartOfContact(){
   ";
   // 短いhid,bidが設定されているかどうか
   $shortHidBid = ((strlen($hid) < 8) || (strlen($bid) < 8));
-  if ($shortHidBid){
+  if ($shortHidBid) {
     $rt = unvList($mysqli, $sql);
     if ($returnSql) $sqla[] = $sql;
-    if (!count($rt['dt'])){
+    if (!count($rt['dt'])) {
       $errobj = [
         'result' => false,
         'msg' => "mail not found",
@@ -785,7 +804,7 @@ function sendPartOfContact(){
       ];
       echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
       $mysqli->rollback();
-      $mysqli->close();    
+      $mysqli->close();
       return false;
     }
     $preSearch = $rt['dt'][0];
@@ -794,7 +813,7 @@ function sendPartOfContact(){
     $bid = $preSearch['bid'];
   }
   $state = $mysqli->real_escape_string(PRMS('partOfContact'));
-  $keep = 14;
+  $keep = 4;
   $item = 'sendpartofcontent_log';
   $sql = "
     insert into ahdLog (hid,bid,date,state,item,keep)
@@ -812,15 +831,14 @@ function sendPartOfContact(){
     FOR UPDATE;
   ";
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $preCon = $rt['dt'][0]['contacts'];
-  }
-  else{
+  } else {
     $preCon = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
   }
   if ($returnSql) $sqla[] = $sql;
   // $preCon = json_decode(escapeChar($preCon), true);
-  
+
   // if ($preCon == NULL)  $preCon = [];
   // $partOfContact = json_decode($partOfContact, true);
 
@@ -835,10 +853,10 @@ function sendPartOfContact(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
-  
+
   $partOfContact = json_decode($partOfContact, true);
   if (json_last_error() !== JSON_ERROR_NONE) {
     $errobj = [
@@ -849,15 +867,14 @@ function sendPartOfContact(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
   // マージする配列があるかどうか確認
-  if (is_array($preCon) && is_array($partOfContact)){
+  if (is_array($preCon) && is_array($partOfContact)) {
     $merged = array_merge($preCon, $partOfContact);
-  }
-  else{
+  } else {
     $errobj = [
       'result' => false,
       'msg' => "array marge error",
@@ -865,11 +882,11 @@ function sendPartOfContact(){
       'preCon' => $preCon,
       'sendLogRt' => $sendLogRt,
       'partOfContact' => $partOfContact,
-      
+
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -889,10 +906,9 @@ function sendPartOfContact(){
   if ($returnSql) $sqla[] = $sql;
   $rt = unvEdit($mysqli, $sql);
   if ($returnSql) $rt['sqla'] = $sqla;
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $mysqli->close();
@@ -900,7 +916,8 @@ function sendPartOfContact(){
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
 }
 
-function sendOneMessageOfContact(){
+function sendOneMessageOfContact()
+{
   global $returnSql;
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -910,7 +927,7 @@ function sendOneMessageOfContact(){
   $did = PRMS('did');
   $msgIndex = (int)PRMS('msgIndex');
   $message = PRMS('message');
-  
+
   // パラメータのエラーチェック
   if (empty($hid)) {
     echo json_encode(['result' => false, 'error' => 'hid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -936,20 +953,20 @@ function sendOneMessageOfContact(){
   $sqla = [];
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
-  
+
   $sql = "
     select hid, bid from ahduser
     where hid like '$hid%'
     and bid like '$bid%'
     and '$token' like concat('%', faptoken, '%') and faptoken != '';
   ";
-  
+
   // 短いhid,bidが設定されているかどうか
   $shortHidBid = ((strlen($hid) < 8) || (strlen($bid) < 8));
-  if ($shortHidBid){
+  if ($shortHidBid) {
     $rt = unvList($mysqli, $sql);
     if ($returnSql) $sqla[] = $sql;
-    if (!count($rt['dt'])){
+    if (!count($rt['dt'])) {
       $errobj = [
         'result' => false,
         'msg' => "mail not found",
@@ -957,16 +974,16 @@ function sendOneMessageOfContact(){
       ];
       echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
       $mysqli->rollback();
-      $mysqli->close();    
+      $mysqli->close();
       return false;
     }
     $preSearch = $rt['dt'][0];
     $hid = $preSearch['hid'];
     $bid = $preSearch['bid'];
   }
-  
+
   $state = $mysqli->real_escape_string(PRMS('partOfContact'));
-  $keep = 14;
+  $keep = 4;
   $item = 'sendpartofcontent_log';
   $sql = "
     insert into ahdLog (hid,bid,date,state,item,keep)
@@ -984,10 +1001,9 @@ function sendOneMessageOfContact(){
     FOR UPDATE;
   ";
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $preCon = $rt['dt'][0]['contacts'];
-  }
-  else{
+  } else {
     $preCon = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
   }
   if ($returnSql) $sqla[] = $sql;
@@ -1002,7 +1018,7 @@ function sendOneMessageOfContact(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -1017,11 +1033,11 @@ function sendOneMessageOfContact(){
       ['content' => '']
     ];
   }
-  
+
   // インデックスにメッセージを設定
   $preCon[$uid][$did][$msgIndex] = $message;
 
-  
+
   $finalJson = json_encode($preCon, JSON_UNESCAPED_UNICODE);
   $finalJson = escapeChar($finalJson);
   $finalJson = $mysqli->real_escape_string($finalJson);
@@ -1035,10 +1051,9 @@ function sendOneMessageOfContact(){
   if ($returnSql) $sqla[] = $sql;
   $rt = unvEdit($mysqli, $sql);
   if ($returnSql) $rt['sqla'] = $sqla;
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $mysqli->close();
@@ -1046,7 +1061,8 @@ function sendOneMessageOfContact(){
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
 }
 
-function sendDtUnderUidOfContact(){
+function sendDtUnderUidOfContact()
+{
   global $returnSql;
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -1054,7 +1070,7 @@ function sendDtUnderUidOfContact(){
   $date = PRMS('date');
   $uid = PRMS('uid');
   $content = PRMS('content');
-  
+
   // パラメータのエラーチェック
   if (empty($hid)) {
     echo json_encode(['result' => false, 'error' => 'hid is missing or empty'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -1080,20 +1096,20 @@ function sendDtUnderUidOfContact(){
   $sqla = [];
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
-  
+
   $sql = "
     select hid, bid from ahduser
     where hid like '$hid%'
     and bid like '$bid%'
     and '$token' like concat('%', faptoken, '%') and faptoken != '';
   ";
-  
+
   // 短いhid,bidが設定されているかどうか
   $shortHidBid = ((strlen($hid) < 8) || (strlen($bid) < 8));
-  if ($shortHidBid){
+  if ($shortHidBid) {
     $rt = unvList($mysqli, $sql);
     if ($returnSql) $sqla[] = $sql;
-    if (!count($rt['dt'])){
+    if (!count($rt['dt'])) {
       $errobj = [
         'result' => false,
         'msg' => "mail not found",
@@ -1101,16 +1117,16 @@ function sendDtUnderUidOfContact(){
       ];
       echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
       $mysqli->rollback();
-      $mysqli->close();    
+      $mysqli->close();
       return false;
     }
     $preSearch = $rt['dt'][0];
     $hid = $preSearch['hid'];
     $bid = $preSearch['bid'];
   }
-  
+
   $state = $mysqli->real_escape_string(PRMS('partOfContact'));
-  $keep = 14;
+  $keep = 4;
   $item = 'sendpartofcontent_log';
   $sql = "
     insert into ahdLog (hid,bid,date,state,item,keep)
@@ -1128,10 +1144,9 @@ function sendDtUnderUidOfContact(){
     FOR UPDATE;
   ";
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $preCon = $rt['dt'][0]['contacts'];
-  }
-  else{
+  } else {
     $preCon = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
   }
   if ($returnSql) $sqla[] = $sql;
@@ -1146,7 +1161,7 @@ function sendDtUnderUidOfContact(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -1169,10 +1184,9 @@ function sendDtUnderUidOfContact(){
   if ($returnSql) $sqla[] = $sql;
   $rt = unvEdit($mysqli, $sql);
   if ($returnSql) $rt['sqla'] = $sqla;
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $mysqli->close();
@@ -1181,7 +1195,8 @@ function sendDtUnderUidOfContact(){
 }
 
 
-function sendContactForFap(){
+function sendContactForFap()
+{
   global $returnSql;
   $hid = PRMS('hid', true);
   $bid = PRMS('bid', true);
@@ -1204,11 +1219,11 @@ function sendContactForFap(){
   ";
   // 短いhid,bidが設定されているかどうか
   $shortHidBid = ((strlen($hid) < 8) || (strlen($bid) < 8));
-  if ($shortHidBid){
+  if ($shortHidBid) {
     $rt = unvList($mysqli, $sql);
     if ($returnSql) $sqla[] = $sql;
-    
-    if (!count($rt['dt'])){
+
+    if (!count($rt['dt'])) {
       $errobj = [
         'result' => false,
         'msg' => "token not found",
@@ -1216,7 +1231,7 @@ function sendContactForFap(){
       ];
       echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
       $mysqli->rollback();
-      $mysqli->close();    
+      $mysqli->close();
       return false;
     }
     $preSearch = $rt['dt'][0];
@@ -1233,10 +1248,9 @@ function sendContactForFap(){
     FOR UPDATE;
   ";
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $t = $rt['dt'][0]['contacts'];
-  }
-  else{
+  } else {
     $t = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
   }
   if ($returnSql) $sqla[] = $sql;
@@ -1244,12 +1258,12 @@ function sendContactForFap(){
   // $preCon = json_decode($t, true);
   // var_dump($t);
   $keyMatch = false;
-  if (array_key_exists($uid, $preCon)){
-    if (array_key_exists($did, $preCon[$uid])){
+  if (array_key_exists($uid, $preCon)) {
+    if (array_key_exists($did, $preCon[$uid])) {
       $keyMatch = true;
     }
   }
-  if (!$keyMatch){
+  if (!$keyMatch) {
     $errobj = [
       'result' => false,
       'msg' => "content key not found",
@@ -1257,7 +1271,7 @@ function sendContactForFap(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   $preCon[$uid][$did][$pos] = json_decode(escapeChar($content), true);
@@ -1277,16 +1291,16 @@ function sendContactForFap(){
   $rt = unvEdit($mysqli, $sql);
   if ($returnSql) $rt['sqla'] = $sqla;
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $mysqli->close();
 }
 
-function fetchContacts(){
+function fetchContacts()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -1299,14 +1313,15 @@ function fetchContacts(){
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $rt['dt'][0]['contacts'] = json_decode($rt['dt'][0]['contacts']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
 
-function fetchWorkshift(){
+function fetchWorkshift()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -1319,7 +1334,7 @@ function fetchWorkshift(){
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $rt['dt'][0]['workshift'] = json_decode($rt['dt'][0]['workshift']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -1328,7 +1343,8 @@ function fetchWorkshift(){
 
 // 事業所番号によるcontentの送信を行う
 // faptokenとctokenによる認証を行う
-function sendPartOfContactJino(){
+function sendPartOfContactJino()
+{
   global $returnSql;
   $jino = PRMS('jino');
   $mail = PRMS('mail');
@@ -1340,10 +1356,9 @@ function sendPartOfContactJino(){
   $hid = '';
   $bid = '';
   $sqla = [];
-  if ($mail){
+  if ($mail) {
     $mailWhere = "pmail = '$mail'";
-  }
-  else{
+  } else {
     $mailWhere = " true";
   }
 
@@ -1367,11 +1382,11 @@ function sendPartOfContactJino(){
   ";
   $rt = unvList($mysqli, $sql);
   $sqla[] = $sql;
-  if (count($rt['dt']) === 1){
+  if (count($rt['dt']) === 1) {
     $hid = $rt['dt'][0]['hid'];
     $bid = $rt['dt'][0]['bid'];
   }
-  if (count($rt['dt']) > 1){
+  if (count($rt['dt']) > 1) {
     $errobj = [
       'result' => false,
       'msg' => "Data cannot be identified because there are multiple offices.",
@@ -1379,7 +1394,7 @@ function sendPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   // mail, uid, faptalkenの認証を行う
@@ -1397,7 +1412,7 @@ function sendPartOfContactJino(){
   ";
   $rt = unvList($mysqli, $sql);
   $sqla[] = $sql;
-  if (count($rt['dt']) === 0){
+  if (count($rt['dt']) === 0) {
     $errobj = [
       'result' => false,
       'msg' => "faptoken authentication failed.",
@@ -1405,7 +1420,7 @@ function sendPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   // 既存のcontactsを取得する
@@ -1417,10 +1432,9 @@ function sendPartOfContactJino(){
     FOR UPDATE;
   ";
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $t = $rt['dt'][0]['contacts'];
-  }
-  else{
+  } else {
     $errobj = [
       'result' => false,
       'msg' => "Invalid data. No existing contact data.",
@@ -1428,23 +1442,22 @@ function sendPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   $sqla[] = $sql;
   $preCon = json_decode(escapeChar($t), true);
-  $UID = 'UID'. $uid;
+  $UID = 'UID' . $uid;
   // echo "UID = $UID<br>";
   // var_dump($preCon);
   // echo "<br>preCon[UID]<br>";
   // var_dump($preCon[$UID]);
-  if (isset($preCon[$UID]) && is_array($preCon[$UID]) && isset($preCon[$UID]['ctoken'])){
+  if (isset($preCon[$UID]) && is_array($preCon[$UID]) && isset($preCon[$UID]['ctoken'])) {
     $thisCToken = $preCon[$UID]['ctoken'];
-  }
-  else{
+  } else {
     $thisCToken = -1;
   }
-  if ($ctoken !== $thisCToken){
+  if ($ctoken !== $thisCToken) {
     $errobj = [
       'result' => false,
       'msg' => "ctoken authentication failed.",
@@ -1452,7 +1465,7 @@ function sendPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   // コンテントの書き換えを行う
@@ -1475,10 +1488,9 @@ function sendPartOfContactJino(){
   $rt = unvEdit($mysqli, $sql);
   if ($returnSql) $rt['sqla'] = $sqla;
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $mysqli->close();
@@ -1486,7 +1498,8 @@ function sendPartOfContactJino(){
 
 // 事業所番号によるcontentの取得を行う
 // faptokenとctokenによる認証を行う
-function fetchPartOfContactJino(){
+function fetchPartOfContactJino()
+{
   global $returnSql;
   $jino = PRMS('jino');
   $mail = PRMS('mail');
@@ -1497,10 +1510,9 @@ function fetchPartOfContactJino(){
   $hid = '';
   $bid = '';
   $sqla = [];
-  if ($mail){
+  if ($mail) {
     $mailWhere = "pmail = '$mail'";
-  }
-  else{
+  } else {
     $mailWhere = " true";
   }
   // 事業所番号よりhid, bidを得る
@@ -1515,11 +1527,11 @@ function fetchPartOfContactJino(){
   ";
   $rt = unvList($mysqli, $sql);
   $sqla[] = $sql;
-  if (count($rt['dt']) === 1){
+  if (count($rt['dt']) === 1) {
     $hid = $rt['dt'][0]['hid'];
     $bid = $rt['dt'][0]['bid'];
   }
-  if (count($rt['dt']) > 1){
+  if (count($rt['dt']) > 1) {
     $errobj = [
       'result' => false,
       'msg' => "Data cannot be identified because there are multiple offices.",
@@ -1527,10 +1539,10 @@ function fetchPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
-  if (count($rt['dt']) === 0){
+  if (count($rt['dt']) === 0) {
     $errobj = [
       'result' => false,
       'msg' => "Can not found jino.",
@@ -1538,10 +1550,10 @@ function fetchPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
-  
+
   // mail, uid, faptalkenの認証を行う
   $sql = "
     SELECT a.hid, a.bid, a.uid, a.date, a.faptoken, a.pmail
@@ -1557,7 +1569,7 @@ function fetchPartOfContactJino(){
   ";
   $rt = unvList($mysqli, $sql);
   $sqla[] = $sql;
-  if (count($rt['dt']) === 0){
+  if (count($rt['dt']) === 0) {
     $errobj = [
       'result' => false,
       'msg' => "faptoken authentication failed.",
@@ -1565,7 +1577,7 @@ function fetchPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   // if (count($rt['dt']) === 1){
@@ -1583,7 +1595,7 @@ function fetchPartOfContactJino(){
   //   $mysqli->close();    
   //   return false;
   // }
-  if (count($rt['dt']) === 0){
+  if (count($rt['dt']) === 0) {
     $errobj = [
       'result' => false,
       'msg' => "not found user. by fap token",
@@ -1591,7 +1603,7 @@ function fetchPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -1605,10 +1617,9 @@ function fetchPartOfContactJino(){
   ";
   $rt = unvList($mysqli, $sql);
   $sqla[] = $sql;
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $t = $rt['dt'][0]['contacts'];
-  }
-  else{
+  } else {
     $errobj = [
       'result' => false,
       'msg' => "No existing contact data.",
@@ -1616,18 +1627,17 @@ function fetchPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   $preCon = json_decode(escapeChar($t), true);
-  $UID = 'UID'. $uid;
-  if (isset($preCon[$UID]) && is_array($preCon[$UID]) && isset($preCon[$UID]['ctoken'])){
+  $UID = 'UID' . $uid;
+  if (isset($preCon[$UID]) && is_array($preCon[$UID]) && isset($preCon[$UID]['ctoken'])) {
     $thisCToken = $preCon[$UID]['ctoken'];
-  }
-  else{
+  } else {
     $thisCToken = -1;
   }
-  if ($ctoken !== $thisCToken){
+  if ($ctoken !== $thisCToken) {
     $errobj = [
       'result' => false,
       'msg' => "ctoken authentication failed.",
@@ -1635,7 +1645,7 @@ function fetchPartOfContactJino(){
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   $rtDt = [];
@@ -1643,10 +1653,9 @@ function fetchPartOfContactJino(){
   $rtDt['result'] = $rt['result'];
   if ($returnSql) $rt['sqla'] = $sqla;
   echo json_encode($rtDt, JSON_UNESCAPED_UNICODE);
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $mysqli->close();
@@ -1654,7 +1663,8 @@ function fetchPartOfContactJino(){
 
 
 
-function fetchSchedule(){
+function fetchSchedule()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -1667,7 +1677,7 @@ function fetchSchedule(){
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     // 空白の配列でのエラー回避
     if ($rt['dt'][0]['schedule'] == '[]') $rt['dt'][0]['schedule'] = '{}';
     $rt['dt'][0]['schedule'] = json_decode($rt['dt'][0]['schedule']);
@@ -1681,7 +1691,8 @@ function fetchSchedule(){
 
 
 
-function sendTransferData(){
+function sendTransferData()
+{
   global $phpnow;
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -1701,19 +1712,53 @@ function sendTransferData(){
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
+// function sendTransferData() {
+//   global $phpnow;
+//   $hid = PRMS('hid');
+//   $bid = PRMS('bid');
+//   $date = PRMS('date');
+//   $dt = PRMS('dt');
+
+//   // Base64デコードとGzip解凍
+//   $decodedData = base64_decode($dt); // Base64デコード
+//   if ($decodedData === false) {
+//       echo json_encode(["error" => "Failed to decode Base64"], JSON_UNESCAPED_UNICODE);
+//       return;
+//   }
+//   $uncompressedData = gzdecode($decodedData); // Gzip解凍
+//   if ($uncompressedData === false) {
+//       echo json_encode(["error" => "Failed to decompress data"], JSON_UNESCAPED_UNICODE);
+//       return;
+//   }
+
+//   // これだけは常に本番DB接続
+//   $mysqli = connectDbPrd();
+//   $sql = "
+//       insert into ahdsenddt (hid, bid, date, gen, dt)
+//       values ('$hid', '$bid', '$date', '$phpnow', '$uncompressedData')
+//       on duplicate key update 
+//           gen = '$phpnow',
+//           dt = '$uncompressedData'
+//   ";
+//   $rt = unvEdit($mysqli, $sql);
+//   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+//   $mysqli->close();
+// }
+
+
 
 // 伝送データに送信済みの日次を付加する
 // unvEditを使うがこれで良いのかｗ
 // clear で送信日付をリセットできる
-function putSentToTransfer(){
+function putSentToTransfer()
+{
   global $phpnow;
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
-  if (array_key_exists('clear', $_REQUEST)){
+  if (array_key_exists('clear', $_REQUEST)) {
     $sent = '0';
-  }
-  else{
+  } else {
     $sent = $phpnow;
   }
   $mysqli = connectDb();
@@ -1730,12 +1775,13 @@ function putSentToTransfer(){
 
 // オプションshortまたはsを付けることによりdtフィールドの出力を抑制し
 // トラフィックを減らす
-function fetchTransferData(){
+function fetchTransferData()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
   $short = false;
-  if (array_key_exists('s', $_REQUEST) || array_key_exists('short', $_REQUEST)){
+  if (array_key_exists('s', $_REQUEST) || array_key_exists('short', $_REQUEST)) {
     $short = true;
   }
   if (!$short) $addiction = ", dt";
@@ -1758,30 +1804,31 @@ function fetchTransferData(){
 // 送信済みまたは未送信のリストを表示する
 // sentとunsentのオプションは両立しない
 // 今の所、登録順でソートされて出力される
-function listSent(){
+function listSent()
+{
   $where_date = "true";
-  if (array_key_exists('date', $_REQUEST)){
+  if (array_key_exists('date', $_REQUEST)) {
     $where_date = "date = '" . PRMS('date') . "'";
   }
   $where_unsent = "true";
-  if (array_key_exists('unsent', $_REQUEST)){
+  if (array_key_exists('unsent', $_REQUEST)) {
     $where_unsent = "gen not like '0000-00-00%' and sent like '0000-00-00%'";
   }
   $where_sent = "true";
-  if (array_key_exists('sent', $_REQUEST)){
+  if (array_key_exists('sent', $_REQUEST)) {
     $where_sent = "gen not like '0000-00-00%' and sent not like '0000-00-00%'";
   }
   $where_reg = "true";
-  if (array_key_exists('hid', $_REQUEST)){
+  if (array_key_exists('hid', $_REQUEST)) {
     $where_reg = "gen not like '0000-00-00%'";
   }
 
   $where_hid = "true";
-  if (array_key_exists('hid', $_REQUEST)){
+  if (array_key_exists('hid', $_REQUEST)) {
     $where_hid = "hid = '" . PRMS('hid') . "'";
   }
   $where_bid = "true";
-  if (array_key_exists('bid', $_REQUEST)){
+  if (array_key_exists('bid', $_REQUEST)) {
     $where_bid = "bid = '" . PRMS('bid') . "'";
   }
 
@@ -1802,7 +1849,8 @@ function listSent(){
   $mysqli->close();
 }
 
-function getTransferPass(){
+function getTransferPass()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $sql = "
@@ -1811,15 +1859,15 @@ function getTransferPass(){
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt']) > 0){
+  if (count($rt['dt']) > 0) {
     $rt['dt'][0]['passwd'] = decodeCph($rt['dt'][0]['passwd']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
-function putTransferPass(){
+function putTransferPass()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $passwd = encodeCph(PRMS('passwd'));
@@ -1836,7 +1884,8 @@ function putTransferPass(){
 }
 // パスワードの変更のみ行われる
 // 使わないかも
-function putAccount(){
+function putAccount()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $mail = PRMS('mail');
@@ -1856,7 +1905,8 @@ function putAccount(){
 
 // アカウントの修正
 // 名前とパーミッションのみ変更可能
-function editAccount(){
+function editAccount()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $mail = PRMS('mail');
@@ -1874,14 +1924,13 @@ function editAccount(){
   $rt = unvEdit($mysqli, $sql);
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
-
 }
 
 // パスワードの全変更
 // 同一メールアドレスは同一アカウントとして扱いパスワードも全て同時に変更する
 // セッション保持用の配列も破棄する
-function updatePasswordsAll(){
+function updatePasswordsAll()
+{
   $mail = PRMS('mail');
   $resetkey = PRMS('resetkey');
   $passwd = encodeCph(PRMS('passwd'));
@@ -1896,7 +1945,7 @@ function updatePasswordsAll(){
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt']) == 0){
+  if (count($rt['dt']) == 0) {
     $rt['msg'] = 'account key not found';
     $rt['result'] = false;
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -1928,12 +1977,12 @@ function updatePasswordsAll(){
   $rt['pre'] = $rtPre;
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-  
 }
 
 // 新しいキーを送信する
 // パスワード認証直後に行う
-function sendNewKey(){
+function sendNewKey()
+{
   global $MAX_KEYS;
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -1950,7 +1999,7 @@ function sendNewKey(){
   $rt = unvList($mysqli, $sql1);
   // 蓄積されているキーを配列化
   $keys = json_decode($rt['dt'][0]['skey'], true);
-  if ($keys === NULL){
+  if ($keys === NULL) {
     $keys = [];
   }
   // 新しいキーを追加
@@ -1971,11 +2020,11 @@ function sendNewKey(){
   $rt['key'] = $key;
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
 // クッキー認証をして新しいキーを返す
-function sertificatAndNew(){
+function sertificatAndNew()
+{
   $mail = PRMS('mail');
   $key = PRMS('key');
   $mysqli = connectDb();
@@ -1986,28 +2035,29 @@ function sertificatAndNew(){
   ";
   $rt = unvList($mysqli, $sql1);
   // 認証不可のレスポンスを用意しておく
-  $eres = array('result'=>false);
+  $eres = array('result' => false);
   // レスポンス件数が0件
-  if (count($rt['dt']) === 0){
+  if (count($rt['dt']) === 0) {
     $eres['massage'] = 'mail address not found.';
     echo json_encode($eres, JSON_UNESCAPED_UNICODE);
     return false;
   }
-  $hid = ''; $bid = ''; 
-  foreach($rt['dt'] as $v){
+  $hid = '';
+  $bid = '';
+  foreach ($rt['dt'] as $v) {
     $keys = json_decode($v['skey'], true);
     // echo($v['bid'] . $v['skey'] . '<br>');
     $s = FALSE;
-    if ($keys != NULL){
+    if ($keys != NULL) {
       $s = array_search($key, $keys); // キー検索結果
     }
-    if ($s !== FALSE){
+    if ($s !== FALSE) {
       $hid = $v['hid'];
       $bid = $v['bid'];
       break;
     }
   }
-  if ($s === FALSE){
+  if ($s === FALSE) {
     $eres['massage'] = 'key not found.';
     echo json_encode($eres, JSON_UNESCAPED_UNICODE);
     return false;
@@ -2015,7 +2065,9 @@ function sertificatAndNew(){
   // 新しいキー作成
   $l = strlen($key);
   $newkey = substr(
-    str_shuffle('1234567890abcdefghijklmnopqrstuvwxyz'), 0, $l
+    str_shuffle('1234567890abcdefghijklmnopqrstuvwxyz'),
+    0,
+    $l
   );
   // 既存のキーを削除して新しい配列にする
   unset($keys[$key]);
@@ -2035,12 +2087,12 @@ function sertificatAndNew(){
   $rt['mail'] = $mail;
   // $rt['sql1'] = $sql1;
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
-
 }
 // hidによるアカウントの取得。
 // 一旦、セッションキーを確認してから
 // リストを返す
-function fetchAccountsByBid(){
+function fetchAccountsByBid()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $key = PRMS('key');
@@ -2056,7 +2108,7 @@ function fetchAccountsByBid(){
     and skey like '%\"$key\"%'
   ";
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt']) === 0){
+  if (count($rt['dt']) === 0) {
     $rt = unvList($mysqli, $sql);
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
     $mysqli->close();
@@ -2074,7 +2126,8 @@ function fetchAccountsByBid(){
 }
 
 
-function getAccount(){
+function getAccount()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $mail = PRMS('mail');
@@ -2092,7 +2145,7 @@ function getAccount(){
     and mail = '$mail';
   ";
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $rt['dt'][0]['passwd'] = decodeCph($rt['dt'][0]['passwd']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -2101,7 +2154,8 @@ function getAccount(){
 
 // メールアドレスとパスワードのみでアカウントを検索する
 // 複数の事業所が返ってくることを想定
-function getAccountByPw(){
+function getAccountByPw()
+{
   $mail = PRMS('mail');
   $pass = encodeCph(PRMS('passwd'));
   $mysqli = connectDb();
@@ -2144,7 +2198,8 @@ function getAccountByPw(){
 }
 
 // キーでアカウントを検索する。
-function getAccountByKey(){
+function getAccountByKey()
+{
   // sertificatAndNew からのコピペ
   $mail = PRMS('mail');
   $key = PRMS('key');
@@ -2180,29 +2235,30 @@ function getAccountByKey(){
   $rt = unvList($mysqli, $sql1);
   $accountList = $rt; // アカウントリストを退避
   // 認証不可のレスポンスを用意しておく
-  $eres = array('result'=>false);
+  $eres = array('result' => false);
   // レスポンス件数が0件
-  if (count($rt['dt']) === 0){
+  if (count($rt['dt']) === 0) {
     $eres['massage'] = 'mail address not found.';
     if ($returnSql) $eres['sql'] = $sql1;
     echo json_encode($eres, JSON_UNESCAPED_UNICODE);
     return false;
   }
-  $hid = ''; $bid = ''; 
+  $hid = '';
+  $bid = '';
 
-  foreach($rt['dt'] as $v){
+  foreach ($rt['dt'] as $v) {
     $keys = json_decode($v['skey'], true);
     $s = FALSE;
-    if ($keys != NULL){
+    if ($keys != NULL) {
       $s = array_search($key, $keys); // キー検索結果
     }
-    if ($s !== FALSE){
+    if ($s !== FALSE) {
       $hid = $v['hid'];
       $bid = $v['bid'];
       break;
     }
   }
-  if ($s === FALSE){
+  if ($s === FALSE) {
     $eres['massage'] = 'key not found.';
     echo json_encode($eres, JSON_UNESCAPED_UNICODE);
     return false;
@@ -2238,7 +2294,8 @@ function getAccountByKey(){
 // update文に変更
 // 最新の指定月以内最新レコードのみ変更する
 // sql複数変更するのでトランザクション追加
-function sendUserEtc(){
+function sendUserEtc()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -2264,17 +2321,17 @@ function sendUserEtc(){
     and date = @a;
   ";
   $rt = unvMultiEdit($mysqli, $sql);
-  if ($rt['resultfalse'] == 0){
+  if ($rt['resultfalse'] == 0) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
 
-function removeUser(){
+function removeUser()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -2293,9 +2350,10 @@ function removeUser(){
   $mysqli->close();
 }
 
-function fetchCompany(){
+function fetchCompany()
+{
   global $secret;
-  if (PRMS('secret') != $secret){
+  if (PRMS('secret') != $secret) {
     $rt['msg'] = 'this is secret api.';
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
     return false;
@@ -2313,9 +2371,10 @@ function fetchCompany(){
   $mysqli->close();
 }
 
-function fetchComExtAll(){
+function fetchComExtAll()
+{
   global $secret;
-  if (PRMS('secret') != $secret){
+  if (PRMS('secret') != $secret) {
     $rt['msg'] = 'this is secret api.';
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
     return false;
@@ -2331,9 +2390,10 @@ function fetchComExtAll(){
 }
 
 
-function fetchBrunch(){
+function fetchBrunch()
+{
   global $secret;
-  if (PRMS('secret') != $secret){
+  if (PRMS('secret') != $secret) {
     $rt['msg'] = 'this is secret api.';
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
     return false;
@@ -2345,11 +2405,11 @@ function fetchBrunch(){
   $rt = unvList($mysqli, $sql);
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
 
-function sendCompany(){
+function sendCompany()
+{
   $hid = PRMS('hid');
   $hname = PRMS('hname');
   $shname = PRMS('shname');
@@ -2402,7 +2462,8 @@ function sendCompany(){
 // 2021/08/09 変更
 // sendAddictionOfBrunchを廃止してこちらに統合する
 // etcとaddictionは必ず指定するようにする
-function sendBrunch(){
+function sendBrunch()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -2481,7 +2542,7 @@ function sendBrunch(){
   $rt['etc'] = $etc;
   $rt['fprefix'] = $fprefix;
   $rt['addiction'] = $addiction;
-  
+
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
@@ -2494,7 +2555,8 @@ function sendBrunch(){
 // いちどDBに問い合わせをして付与すべきIDを取得しているこの時にトランザクションを
 // 開始すべきだがIDは必ずしもuniqである必要がないのでトランザクション処理は行わない
 // やっぱりトランザクションする
-function sendUser(){
+function sendUser()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -2533,7 +2595,7 @@ function sendUser(){
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
   // uid 送信されない場合は新規データとして解釈 テーブルのデータから作成する
-  if ($uid == ''){
+  if ($uid == '') {
     $sqlpre = "SELECT max(uid) uid FROM `ahduser` where hid='$hid';";
     $rtpre = unvList($mysqli, $sqlpre);
     $uid = intval($rtpre['dt'][0]['uid']) + 1;
@@ -2599,10 +2661,9 @@ function sendUser(){
         bid = '$bid';
   ";
 
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $rt0 = unvList($mysqli, $sql1);
@@ -2619,7 +2680,8 @@ function sendUser(){
 // いちどDBに問い合わせをして付与すべきIDを取得しているこの時にトランザクションを
 // 開始すべきだがIDは必ずしもuniqである必要がないのでトランザクション処理は行わない
 // やっぱトランザクションする
-function sendUserWithEtc(){
+function sendUserWithEtc()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -2662,18 +2724,18 @@ function sendUserWithEtc(){
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
 
   // 最初に既存のユーザーがいないか受給者証番号で検索する
-  if ($uid == ''){
+  if ($uid == '') {
     $sqlpre = "
       select uid from `ahduser`
       where hid='$hid' and bid='$bid' and hno='$hno'
     ";
     $rtpre0 = unvList($mysqli, $sqlpre);
-    if (array_key_exists('dt', $rtpre0) && count($rtpre0['dt'])){
+    if (array_key_exists('dt', $rtpre0) && count($rtpre0['dt'])) {
       $uid = $rtpre0['dt'][0]['uid'];
     }
   }
   // uid 送信されない場合は新規データとして解釈 テーブルのデータから作成する
-  if ($uid == ''){
+  if ($uid == '') {
     // 素数配列からランダムに数値を選び
     $primeNums = [11, 13, 17, 19, 47, 53, 59];
     $nextInc = mt_rand(0, count($primeNums) - 1);
@@ -2742,18 +2804,17 @@ function sendUserWithEtc(){
         date = '$date' and
         bid = '$bid';
   ";
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $rt0 = unvList($mysqli, $sql1);
   $rt['uid'] = $rt0['dt'][0]['uid'];
-  if (isset($rtpre)){
+  if (isset($rtpre)) {
     $rt['rtpre'] = $rtpre;
   }
-  if (isset($rtpre0)){
+  if (isset($rtpre0)) {
     $rt['rtpre0'] = $rtpre0;
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -2763,7 +2824,8 @@ function sendUserWithEtc(){
 
 // ドキュメント作成用データ送信
 // 常に本番DBを使う
-function sendDocument(){
+function sendDocument()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $stamp = PRMS('stamp');
@@ -2798,7 +2860,8 @@ function sendDocument(){
   $mysqli->close();
 }
 
-function fetchDocument(){
+function fetchDocument()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $stamp = PRMS('stamp');
@@ -2810,7 +2873,7 @@ function fetchDocument(){
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $rt['dt'][0]['content'] = json_decode($rt['dt'][0]['content']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -2822,7 +2885,8 @@ function fetchDocument(){
 // 2022/01/02 変数付きsqlに変更
 // トランザクション追加
 // この更新はstdDateを更新しないよ
-function sendUserEtcMulti(){
+function sendUserEtcMulti()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -2833,7 +2897,7 @@ function sendUserEtcMulti(){
 
   $sql = '';
   // var_dump($ary);
-  foreach ($ary as $v){
+  foreach ($ary as $v) {
     $uid = $v['uid'];
     $etc = $v['etc'];
     // $etc = json_encode($v['etc'], JSON_UNESCAPED_UNICODE);
@@ -2852,17 +2916,17 @@ function sendUserEtcMulti(){
   }
 
   $rt = unvMultiEdit($mysqli, $sql);
-  if ($rt['resultfalse'] == 0){
+  if ($rt['resultfalse'] == 0) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
 
-function replaceUsersCity(){
+function replaceUsersCity()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $scity = PRMS('scity');
@@ -2881,7 +2945,8 @@ function replaceUsersCity(){
 }
 
 // 名前で市区町村番号を変更する
-function replaceUsersCityNoByName(){
+function replaceUsersCityNoByName()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $scity = PRMS('scity');
@@ -2902,13 +2967,14 @@ function replaceUsersCityNoByName(){
 
 // ユーザーソート用のインデックスをまとめて書き込む
 // indexsetは[[uid, sinde], [uid, sinde]...]の二次元配列
-function sendUsersIndex(){
+function sendUsersIndex()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $j = PRMS('indexset');
   $ary = json_decode($j);
   $sql = '';
-  foreach ($ary as $v){
+  foreach ($ary as $v) {
     $sindex = $v[1];
     $uid = $v[0];
     $oneSql = "
@@ -2922,10 +2988,10 @@ function sendUsersIndex(){
   $mysqli = connectDb();
   $rt = unvMultiEdit($mysqli, $sql);
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
-
 }
 // アカウントの追加 メールアドレスとリセットキーのセット
-function addAccount(){
+function addAccount()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $mail = PRMS('mail');
@@ -2939,11 +3005,10 @@ function addAccount(){
   $rt = unvList($mysqli, $sql);
   // 最初のレコードからパスワードを取得する。
   // 同じメールアドレスは同じパスワードが設定されているという前提にする
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $passwd = $rt['dt'][0]['passwd'];
     $mailCount = count($rt['dt']);
-  }
-  else {
+  } else {
     $passwd = '';
     $mailCount = 0;
   }
@@ -2971,7 +3036,8 @@ function addAccount(){
 
 }
 // アカウントのパスワードリセット
-function resetAccountPass(){
+function resetAccountPass()
+{
   $mail = PRMS('mail');
   $resetkey = PRMS('resetkey');
   $sql = "
@@ -2985,7 +3051,8 @@ function resetAccountPass(){
 }
 
 // アカウントメール送信のラッパー
-function sendAccountMail(){
+function sendAccountMail()
+{
   global $cgiAdrress;
   $fname = PRMS('fname');
   $lname = PRMS('lname');
@@ -2994,23 +3061,24 @@ function sendAccountMail(){
   $mode = PRMS('mode');
   $hname = PRMS('hname');
   $bname = PRMS('bname');
-  $url = 
-    $cgiAdrress . "/py/sendaccountmail.py?" . 
+  $url =
+    $cgiAdrress . "/py/sendaccountmail.py?" .
     "fname=$fname&lname=$lname&mail=$mail&resetkey=$resetkey&mode=$mode&" .
     "hname=$hname&bname=$bname";
   // $url = htmlspecialchars($url);
   $url = str_replace(' ', "%20", $url);
-  
+
   // 2021/10/01追加 突然動かなくなった
   // https://qiita.com/izanari/items/f4f96e11a2b01af72846
-  $options['ssl']['verify_peer']=false;
-  $options['ssl']['verify_peer_name']=false;
+  $options['ssl']['verify_peer'] = false;
+  $options['ssl']['verify_peer_name'] = false;
   $json = file_get_contents($url, false, stream_context_create($options));
   echo $json;
 }
 
 // アカウントメール送信のラッパー
-function sendFapTokenMail(){
+function sendFapTokenMail()
+{
   global $cgiAdrress;
   $pname = PRMS('pname');
   $pmail = urlencode(PRMS('pmail'));
@@ -3018,19 +3086,20 @@ function sendFapTokenMail(){
   $mode = PRMS('mode');
   $hname = PRMS('hname');
   $bname = PRMS('bname');
-  $url = 
-    $cgiAdrress . "/py/sendfaptokenmail.py?" . 
+  $url =
+    $cgiAdrress . "/py/sendfaptokenmail.py?" .
     "pname=$pname&pmail=$pmail&faptoken=$faptoken&mode=$mode&" .
     "hname=$hname&bname=$bname";
   $url = str_replace(' ', "%20", $url);
-  
-  $options['ssl']['verify_peer']=false;
-  $options['ssl']['verify_peer_name']=false;
+
+  $options['ssl']['verify_peer'] = false;
+  $options['ssl']['verify_peer_name'] = false;
   $json = file_get_contents($url, false, stream_context_create($options));
   echo $json;
 }
 
-function sendFapNoticeMail(){
+function sendFapNoticeMail()
+{
   global $cgiAdrress;
   $pname = PRMS('pname');
   $pmail = urlencode(PRMS('pmail'));
@@ -3040,19 +3109,20 @@ function sendFapNoticeMail(){
   $name = PRMS('name');
   $token = PRMS('token');
 
-  $url = 
-    $cgiAdrress . "/py/sendfapnoticemail.py?" . 
+  $url =
+    $cgiAdrress . "/py/sendfapnoticemail.py?" .
     "pname=$pname&pmail=$pmail&item=$item&name=$name&" .
     "hname=$hname&bname=$bname&token=$token";
   $url = str_replace(' ', "%20", $url);
-  
-  $options['ssl']['verify_peer']=false;
-  $options['ssl']['verify_peer_name']=false;
+
+  $options['ssl']['verify_peer'] = false;
+  $options['ssl']['verify_peer_name'] = false;
   $json = file_get_contents($url, false, stream_context_create($options));
   echo $json;
 }
 
-function sendFapNoticeMailPost(){
+function sendFapNoticeMailPost()
+{
   global $cgiAdrress;
   $params = array(
     'pname' => trim(PRMS('pname')),
@@ -3069,8 +3139,8 @@ function sendFapNoticeMailPost(){
   );
 
   $data = array();
-  foreach($params as $key => $value) {
-    if(!empty($value)) {
+  foreach ($params as $key => $value) {
+    if (!empty($value)) {
       // if($key === 'pmail') {
       //   $value = urlencode($value);
       // }
@@ -3079,7 +3149,7 @@ function sendFapNoticeMailPost(){
     }
   }
 
-  if(empty($data)) {
+  if (empty($data)) {
     header('Content-Type: application/json');
     echo json_encode(array('result' => false));
     return;
@@ -3100,13 +3170,14 @@ function sendFapNoticeMailPost(){
   $context = stream_context_create($options);
   $json = file_get_contents($url, false, $context);
   // $json = json_encode($data);;
-  if($json === false) {
+  if ($json === false) {
     echo 'An error occurred while sending the request.';
   } else {
     echo $json;
   }
 }
-function sendHtmlMail(){
+function sendHtmlMail()
+{
   global $cgiAdrress;
   $params = array(
     'pmail' => trim(PRMS('pmail')),
@@ -3117,8 +3188,8 @@ function sendHtmlMail(){
   );
 
   $data = array();
-  foreach($params as $key => $value) {
-    if(!empty($value)) {
+  foreach ($params as $key => $value) {
+    if (!empty($value)) {
       // if($key === 'pmail') {
       //   $value = urlencode($value);
       // }
@@ -3126,7 +3197,7 @@ function sendHtmlMail(){
     }
   }
 
-  if(empty($data)) {
+  if (empty($data)) {
     header('Content-Type: application/json');
     echo json_encode(array('result' => false));
     return;
@@ -3147,7 +3218,7 @@ function sendHtmlMail(){
   $context = stream_context_create($options);
   $json = file_get_contents($url, false, $context);
   // $json = json_encode($data);;
-  if($json === false) {
+  if ($json === false) {
     echo 'An error occurred while sending the request.';
   } else {
     echo $json;
@@ -3205,7 +3276,8 @@ function sendHtmlMail(){
 
 
 // 自動送信のメールを作成
-function createAutoMsg(){
+function createAutoMsg()
+{
   $date = PRMS('date');
   $sql = "
     select user.*, 
@@ -3239,7 +3311,7 @@ function createAutoMsg(){
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
   // $rt['dt'][0]['etc'] = json_decode($rt['dt'][0]['etc']);
-  foreach($rt['dt'] as &$val){
+  foreach ($rt['dt'] as &$val) {
     $val['etc'] = json_decode($val['etc']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -3248,7 +3320,8 @@ function createAutoMsg(){
 
 
 // リセットキーによるアカウントの取得
-function getAccountByRestkey(){
+function getAccountByRestkey()
+{
   $resetkey = PRMS('resetkey');
   $sql = "
     select * from ahdaccount
@@ -3259,9 +3332,10 @@ function getAccountByRestkey(){
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
 }
 
-function listAccount(){
+function listAccount()
+{
   global $secret;
-  if (PRMS('secret') != $secret){
+  if (PRMS('secret') != $secret) {
     $rt['msg'] = 'this is secret api.';
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
     return false;
@@ -3273,17 +3347,17 @@ function listAccount(){
   $bid = PRMS('bid');
   $mail = PRMS('mail');
   if ($offset == '')  $offset = 0;
-  if ($limit != ''){
+  if ($limit != '') {
     $limitFraise = " limit $offset , $limit";
   }
   $whereFraise = "where TRUE ";
-  if ($hid != ''){
+  if ($hid != '') {
     $whereFraise .= "and account.hid='$hid' ";
   }
-  if ($bid != ''){
+  if ($bid != '') {
     $whereFraise .= "and account.bid='$bid' ";
   }
-  if ($mail != ''){
+  if ($mail != '') {
     $whereFraise .= "and account.mail like '%$mail%' ";
   }
   $sql = "
@@ -3306,13 +3380,14 @@ function listAccount(){
     $limitFraise;
   ";
   $rt = unvList(connectDb(), $sql);
-  foreach($rt['dt'] as &$val){
+  foreach ($rt['dt'] as &$val) {
     $val['passwd'] = decodeCph($val['passwd']);
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
 }
 
-function sendFsExcelImg(){
+function sendFsExcelImg()
+{
   $jino = PRMS('jino');
   $date = PRMS('date');
   $grid = PRMS('grid');
@@ -3330,14 +3405,14 @@ function sendFsExcelImg(){
   $mysqli->close();
 }
 
-function fetchFsExcelImg(){
+function fetchFsExcelImg()
+{
   $count = PRMS('count');
   $all = PRMS('all');
   $mysqli = connectDb();
-  if ($all){
+  if ($all) {
     $whereStr = "true";
-  }
-  else{
+  } else {
     $whereStr = "done = 0";
   }
   $sql = "
@@ -3347,20 +3422,20 @@ function fetchFsExcelImg(){
     limit 0, $count
   ";
   $rt = unvList($mysqli, $sql);
-  if ($rt['result'] == true){
+  if ($rt['result'] == true) {
     // foreach($rt['dt'] as $d){
     //   $d['grid'] = json_decode($d['grid'], true);
     // }
-    for ($i = 0; $i < count($rt['dt']); $i++){
+    for ($i = 0; $i < count($rt['dt']); $i++) {
       $rt['dt'][$i]['grid'] = json_decode($rt['dt'][$i]['grid']);
     }
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
-function setDoneFsExcelImg(){
+function setDoneFsExcelImg()
+{
   $ts = PRMS('ts');
   $mysqli = connectDb();
   $sql = "
@@ -3373,7 +3448,8 @@ function setDoneFsExcelImg(){
   $mysqli->close();
 };
 
-function sendSomeState(){
+function sendSomeState()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -3395,25 +3471,25 @@ function sendSomeState(){
   $mysqli->close();
 };
 
-function fetchSomeState(){
+function fetchSomeState()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
   $item = PRMS('item');
   $jino = PRMS('jino');
-  
+
   // hidとbidのセットを指定するかjinoで指定するか
-  if ($hid){
+  if ($hid) {
     $whereStr = "hid='$hid' and bid='$bid' ";
-  }
-  else{
+  } else {
     $whereStr = "jino='$jino' ";
   }
-  if ($date){
+  if ($date) {
     $whereStr .= "and date='$date' ";
   }
-  if ($item){
+  if ($item) {
     $whereStr .= "and item='$item' ";
   }
   $sql = "
@@ -3421,7 +3497,7 @@ function fetchSomeState(){
     where $whereStr
   ";
   $rt = unvList($mysqli, $sql);
-  for ($i = 0; $i < count($rt['dt']); $i++){
+  for ($i = 0; $i < count($rt['dt']); $i++) {
     $rt['dt'][$i]['state'] = json_decode($rt['dt'][$i]['state'], true);
     // if (json_last_error() !== JSON_ERROR_NONE) {
     //   echo 'json_decode error: ' . json_last_error_msg();
@@ -3433,7 +3509,8 @@ function fetchSomeState(){
   $mysqli->close();
 };
 
-function sendAnyState(){
+function sendAnyState()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -3454,18 +3531,19 @@ function sendAnyState(){
   $mysqli->close();
 };
 
-function fetchAnyState(){
+function fetchAnyState()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
   $item = PRMS('item');
-  
+
   $whereStr = "hid='$hid' and bid='$bid' ";
-  if ($date){
+  if ($date) {
     $whereStr .= "and date='$date' ";
   }
-  if ($item){
+  if ($item) {
     $whereStr .= "and item='$item' ";
   }
   $sql = "
@@ -3473,7 +3551,7 @@ function fetchAnyState(){
     where $whereStr
   ";
   $rt = unvList($mysqli, $sql);
-  for ($i = 0; $i < count($rt['dt']); $i++){
+  for ($i = 0; $i < count($rt['dt']); $i++) {
     $rt['dt'][$i]['state'] = json_decode($rt['dt'][$i]['state'], true);
     // if (json_last_error() !== JSON_ERROR_NONE) {
     //   echo 'json_decode error: ' . json_last_error_msg();
@@ -3486,7 +3564,8 @@ function fetchAnyState(){
 };
 
 
-function deleteSomeState(){
+function deleteSomeState()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -3494,20 +3573,17 @@ function deleteSomeState(){
   $item = PRMS('item');
   $jino = PRMS('jino');
   $date = PRMS('date');
-  
+
   // hidとbidのセットを指定するかjinoで指定するか
-  if ($hid){
+  if ($hid) {
     $whereStr = "hid='$hid' and bid='$bid' ";
-  }
-  else{
+  } else {
     $whereStr = "jino='$jino' ";
   }
-  if ($timestamp){
+  if ($timestamp) {
     $whereStr .= "and timestamp<='$timestamp' ";
-  }
-  else{
+  } else {
     $whereStr .= "and date<='$date' ";
-
   }
   $whereStr .= "and item='$item' ";
   $sql = "
@@ -3520,13 +3596,15 @@ function deleteSomeState(){
   $mysqli->close();
 };
 
-function getDbname(){
+function getDbname()
+{
   echo json_encode(DBNAME, JSON_UNESCAPED_UNICODE);
 }
 
 
 // ワムネットスクレイピング対応
-function sendOfficeis(){
+function sendOfficeis()
+{
   $jino = PRMS('jino');
   $pref = PRMS('pref');
   $bname = PRMS('bname');
@@ -3567,40 +3645,37 @@ function sendOfficeis(){
       lupdate = '$lupdate'
   ";
   $rt = unvEdit($mysqli, $sql);
-  
+
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
 
 // ワムネットスクレイピング対応
-function fetchOfficeis(){
+function fetchOfficeis()
+{
   $pref = PRMS('pref');
   $jino = PRMS('jino');
   $newoffice = PRMS('newoffice');
   $whereStr = "";
 
-  if ($pref){
+  if ($pref) {
     $whereStr = " where pref = '$pref'";
-  }
-  else if ($jino){
+  } else if ($jino) {
     $whereStr = " where jino = '$jino'";
-  }
-  else if ($newoffice){
+  } else if ($newoffice) {
     $whereStr = " 
     where DATEDIFF(CURDATE(), 
     STR_TO_DATE(REPLACE(JSON_EXTRACT(others, '$.\"事業の開始(予定)年月日\"'), '\"', ''), '%Y/%m/%d')) <= $newoffice";
-  }
-  else{
+  } else {
     $whereStr = " false";
   }
 
   $sql = "
     select * from ahdofficeis
-  " . $whereStr
-  ;
+  " . $whereStr;
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (is_array($rt['dt']) && count($rt['dt'])){
+  if (is_array($rt['dt']) && count($rt['dt'])) {
     foreach ($rt['dt'] as $key => $value) {
       $rt['dt'][$key]['others'] = json_decode($value['others']);
     }
@@ -3612,7 +3687,8 @@ function fetchOfficeis(){
 
 // 事業所情報とusersから最小の月を取得
 // スケジュールから最大の月を取得
-function getMinMaxOfMonnth(){
+function getMinMaxOfMonnth()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $sql = "
@@ -3623,7 +3699,7 @@ function getMinMaxOfMonnth(){
   $rt = unvList($mysqli, $sql);
   $rt0 = $rt;
   $min = '';
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $min = $rt['dt'][0]['min'];
   }
   $sql = "
@@ -3633,7 +3709,7 @@ function getMinMaxOfMonnth(){
   $rt = unvList($mysqli, $sql);
   $rt1 = $rt;
   $minu = '';
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $minu = $rt['dt'][0]['min'];
   }
   if ($minu > $min) $min = $minu;
@@ -3644,7 +3720,7 @@ function getMinMaxOfMonnth(){
   $rt = unvList($mysqli, $sql);
   $rt2 = $rt;
   $max = date('Y-m-d');
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $max = $rt['dt'][0]['max'];
   }
   $rt = [];
@@ -3658,11 +3734,12 @@ function getMinMaxOfMonnth(){
   $mysqli->close();
 }
 // ユーザーの次の変更履歴を取得する
-function fetchNextUserInfo(){
+function fetchNextUserInfo()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
-  
+
   $sql = "
     select uid, name, MIN(date) next from ahduser
     where hid='$hid' and bid='$bid' and date>'$date'
@@ -3672,12 +3749,12 @@ function fetchNextUserInfo(){
   $rt = unvList($mysqli, $sql);
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
 // 該当のユーザーを全て削除する
 // allnewをつけると以降全て
-function deleteAllUser(){
+function deleteAllUser()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -3686,7 +3763,7 @@ function deleteAllUser(){
 
   if ($allnew)  $ope = '>=';
   else          $ope = '=';
-  
+
   $sql = "
     delete from ahduser
     where hid='$hid' and bid='$bid' and date $ope '$date'
@@ -3699,7 +3776,8 @@ function deleteAllUser(){
 
 // 該当のスケジュールを削除する
 // allnewをつけると以降全て
-function deleteSchedule(){
+function deleteSchedule()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -3719,7 +3797,8 @@ function deleteSchedule(){
   $mysqli->close();
 };
 
-function deleteCalender(){
+function deleteCalender()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -3740,7 +3819,8 @@ function deleteCalender(){
 };
 
 // アカウント削除
-function deleteAccount(){
+function deleteAccount()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -3757,7 +3837,8 @@ function deleteAccount(){
 
 // 該当のブランチを削除
 // allnewをつけると以降全て
-function deleteBrunch(){
+function deleteBrunch()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -3780,11 +3861,12 @@ function deleteBrunch(){
 
 
 // ユーザーの次の変更履歴を取得する
-function fetchNextComInfo(){
+function fetchNextComInfo()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
-  
+
   $sql = "
     select MIN(date) next from ahdbrunch
     where hid='$hid' and bid='$bid' and date>'$date'
@@ -3794,10 +3876,10 @@ function fetchNextComInfo(){
   $rt = unvList($mysqli, $sql);
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
-function copySchedule(){
+function copySchedule()
+{
   $mysqli = connectDb();
   $hid = PRMS('hid');
   $bid = PRMS('bid');
@@ -3818,11 +3900,11 @@ function copySchedule(){
 
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
 
-function sendUsageFee(){
+function sendUsageFee()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -3841,18 +3923,18 @@ function sendUsageFee(){
   $mysqli->close();
 }
 
-function fetchUsageFee(){
+function fetchUsageFee()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
-  if ($bid){
+  if ($bid) {
     $whereStr = " and bid = '$bid' ";
-  }
-  else{
+  } else {
     $whereStr = "";
   }
   $mysqli = connectDb();
-  if ($bid){
+  if ($bid) {
     $sql = "
       select ahdusagefee.*, brunch.bname, com.hname, com.shname, brunch.sbname,
       brunch.bdate
@@ -3872,8 +3954,7 @@ function fetchUsageFee(){
         WHERE hid='$hid' and bid='$bid' and date<='$date'
       );
     ";
-  }
-  else{
+  } else {
     $sql = "
       select uf.date, uf.hid, uf.bid, uf.fee, uf.adjust, uf.hide,
       com.hname, com.shname,
@@ -3898,7 +3979,7 @@ function fetchUsageFee(){
       );
     ";
   }
-  
+
   // "join (
   //   SELECT MAX(date) mdate, date, uid,bid,hid FROM `ahduser` 
   //   where date <= '$date' GROUP BY uid,hid,bid    
@@ -3914,14 +3995,14 @@ function fetchUsageFee(){
   $mysqli->close();
 }
 
-function removeUsageFee(){
+function removeUsageFee()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
-  if ($bid){
+  if ($bid) {
     $whereStr = " and bid = '$bid' ";
-  }
-  else{
+  } else {
     $whereStr = "";
   }
   $mysqli = connectDb();
@@ -3934,7 +4015,8 @@ function removeUsageFee(){
   $mysqli->close();
 }
 
-function fetchContactsForFAP(){
+function fetchContactsForFAP()
+{
   // mailとtokenでahduserを検索 listを作成
   // hid,bidが指定されていたらlistから絞り込み
   // 指定されていなかったらlisの0番目をuserとして特定
@@ -3966,7 +4048,7 @@ function fetchContactsForFAP(){
       com.hname, com.shname
     from ahduser as user 
     join ahdbrunch as brunch using (hid, bid)
-    join ahdcompany as com using (hid)" . 
+    join ahdcompany as com using (hid)" .
     "join (
       SELECT MAX(date) mdate, date, uid,bid,hid FROM `ahduser` 
       where date <= '$date' and pmail = '$mail' 
@@ -4001,17 +4083,15 @@ function fetchContactsForFAP(){
   $mysqli = connectDb();
 
   $rt = unvList($mysqli, $sql);
-  if ($rt['result']){
+  if ($rt['result']) {
     $users = $rt['dt'];
-  }
-  else{
+  } else {
     $frt['users'] = null;
     $frt['result'] = false;
     $frt['msg'] = 'user fetch error.';
     echo json_encode($frt, JSON_UNESCAPED_UNICODE);
     $mysqli->close();
     return false;
-
   }
   // hid bid を上6桁を作成する
   $i = 0;
@@ -4025,7 +4105,7 @@ function fetchContactsForFAP(){
   // tokenは複数が連結されて送信されてくるので部分一致で返す
   foreach ($users as $v) {
     if (!$v['faptoken']) continue;
-    if (strpos($token, $v['faptoken']) !== false){
+    if (strpos($token, $v['faptoken']) !== false) {
       $fUsers[] = $v;
     }
   }
@@ -4041,43 +4121,42 @@ function fetchContactsForFAP(){
     else $bidMatch = false;
     // echo('prms ' . $hid . $bid . ' dbrow ' . $v['hid'] . $v['bid'] . '<br>');
     // hidのみ指定済み
-    if ($hid && $hidMatch && !$bid){
+    if ($hid && $hidMatch && !$bid) {
       $fUsers[] = $v;
     }
     // bid hid 指定済み
-    else if ($hidMatch && $bidMatch){
+    else if ($hidMatch && $bidMatch) {
       $fUsers[] = $v;
     }
     // 指定がない 全部追加
-    else if (!$hid && !$bid){
+    else if (!$hid && !$bid) {
       $fUsers[] = $v;
     }
   }
-  if ($hid){
+  if ($hid) {
     $frt['filtered_users'] = $fUsers;
   }
-  
+
   // $frt['users'] = $fUsers;
   // $frt['usersOrg'] = $usersOrg;
   if ($returnSql) $frt['sql'][] = $rt['sql'];
   // 該当ユーザーの特定 絞り込みの結果件数が0だと hid bidで絞り込み前のユーザーから
   // ユーザー特定を行う それも見つからなかったらエラーにする
   $matched = false;
-  if (count($fUsers) > 0 && $uid){
+  if (count($fUsers) > 0 && $uid) {
     foreach ($fUsers as $v) {
-      if ($v['uid'] === $uid){
+      if ($v['uid'] === $uid) {
         $userInfo = $v;
         $matched = true;
         break;
       }
     }
-  }
-  else if (count($fUsers) > 0){
+  } else if (count($fUsers) > 0) {
     $userInfo = $fUsers[0];
     $matched = true;
   }
   // ユーザーが特定できない場合
-  if (!$matched){
+  if (!$matched) {
     $frt['userInfo'] = null;
     $frt['result'] = false;
     $frt['msg'] = 'user not found.';
@@ -4112,33 +4191,31 @@ function fetchContactsForFAP(){
   // afpConfigを取得 rtに追加 見つからなかったら初期値を追加
   $config = false;
   $messagetoall = '';
-  if ($rt['result']){
+  if ($rt['result']) {
     $frt['com'] = $rt['dt'][0];
     // コンフィグの存在確認
-    if (array_key_exists('etc', $rt['dt'][0])){
+    if (array_key_exists('etc', $rt['dt'][0])) {
       $comEtc = json_decode($rt['dt'][0]['etc'], true);
-      if (array_key_exists('settingContactBook', $comEtc)){
+      if (array_key_exists('settingContactBook', $comEtc)) {
         $config = $comEtc['settingContactBook'];
       }
     }
-    if (!$config){
+    if (!$config) {
       $config = array(
-       'dummy' => 'dummy' 
+        'dummy' => 'dummy'
       );
     }
     $frt['config'] = $config;
     // messagetoallの確認
-    if (array_key_exists('ext', $rt['dt'][0])){
+    if (array_key_exists('ext', $rt['dt'][0])) {
       $ext = json_decode($rt['dt'][0]['ext'], true);
-      if ($ext){
-        if (array_key_exists('messagetoall', $ext)){
+      if ($ext) {
+        if (array_key_exists('messagetoall', $ext)) {
           $messagetoall = $ext['messagetoall'];
         }
       }
     }
-  }
-  
-  else {
+  } else {
     $frt['com'] = null;
     $frt['result'] = false;
     $frt['msg'] = 'com fetch error.';
@@ -4182,22 +4259,21 @@ function fetchContactsForFAP(){
   $schedule = [];
   $schedule['bros'] = [];
   $t = false;
-  if ($rt['result']){
-    if (count($rt['dt'])){
+  if ($rt['result']) {
+    if (count($rt['dt'])) {
       $t = json_decode($rt['dt'][0]['schedule'], true);
-      if (array_key_exists($UID, $t)){
+      if (array_key_exists($UID, $t)) {
         $schedule = $t[$UID];
       }
     }
     // 兄弟のスケジュールを追加
     foreach ($brosUID as $v) {
       if (!$t) continue;
-      if (array_key_exists('UID' . $v, $t)){
+      if (array_key_exists('UID' . $v, $t)) {
         $schedule['bros']['UID' . $v] = $t['UID' . $v];
       }
     }
-  }
-  else{
+  } else {
     $frt['schedule'] = null;
     $frt['result'] = false;
     $frt['msg'] = 'scedule fetch error.';
@@ -4217,15 +4293,14 @@ function fetchContactsForFAP(){
   ";
   $rt = unvList($mysqli, $sql);
   $contacts = [];
-  if ($rt['result']){
-    if (count($rt['dt'])){
+  if ($rt['result']) {
+    if (count($rt['dt'])) {
       $t = json_decode($rt['dt'][0]['contacts'], true);
-      if (array_key_exists($UID, $t)){
+      if (array_key_exists($UID, $t)) {
         $contacts = $t[$UID];
       }
     }
-  }
-  else{
+  } else {
     $frt['contacts'] = null;
     $frt['result'] = false;
     $frt['msg'] = 'contacts fetch error.';
@@ -4235,16 +4310,16 @@ function fetchContactsForFAP(){
   }
 
   foreach ($contacts as $key => &$value) {
-    if (preg_match('/^D2[0-9]+/', $key)){
-      if (array_key_exists('draft', $value[2])){
-        if ($value[2]['draft']){
+    if (preg_match('/^D2[0-9]+/', $key)) {
+      if (array_key_exists('draft', $value[2])) {
+        if ($value[2]['draft']) {
           $value[2]['content'] = '';
           unset($value[2]['photos']);
           unset($value[2]['vital']);
         }
       }
-      if (array_key_exists('draft', $value[0])){
-        if ($value[0]['draft']){
+      if (array_key_exists('draft', $value[0])) {
+        if ($value[0]['draft']) {
           $value[0]['content'] = '';
           unset($value[2]['photos']);
           unset($value[2]['vital']);
@@ -4259,36 +4334,40 @@ function fetchContactsForFAP(){
   $mysqli->close();
 }
 // カレンダーファールが正しいかどうか確認を行う
-function checkCalender(){
+function checkCalender()
+{
   $sql = "
     select * from ahdcalender;
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
   $errList = [];
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     foreach ($rt['dt'] as $e) {
       $date = $e['date'];
       $dateList = json_decode($e['dateList'], true);
-      if (count($dateList)){
-        if ($date != $dateList[0]['date']){
+      if (count($dateList)) {
+        if ($date != $dateList[0]['date']) {
           $errList[] = array(
-            'hid' => $e['hid'], 'bid' => $e['bid'], 'date' => $date,
+            'hid' => $e['hid'],
+            'bid' => $e['bid'],
+            'date' => $date,
           );
         }
       }
     }
   }
   $rtnDt = array(
-    'count'=> count($rt['dt']),
-    'errList'=>$errList,
-    'rt'=>$rt,
+    'count' => count($rt['dt']),
+    'errList' => $errList,
+    'rt' => $rt,
   );
   echo json_encode($rtnDt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
 // スケジュールデータが存在する月を列挙する
-function fetchScheduleAria(){
+function fetchScheduleAria()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $sql = "
@@ -4302,7 +4381,8 @@ function fetchScheduleAria(){
   $mysqli->close();
 }
 
-function sendUsersExt(){
+function sendUsersExt()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -4319,7 +4399,8 @@ function sendUsersExt(){
   $mysqli->close();
 }
 
-function fetchUsersExt(){
+function fetchUsersExt()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -4334,7 +4415,8 @@ function fetchUsersExt(){
 }
 
 
-function sendComExt(){
+function sendComExt()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $ext = PRMS('ext');
@@ -4350,7 +4432,8 @@ function sendComExt(){
   $mysqli->close();
 }
 
-function fetchUsersHist(){
+function fetchUsersHist()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -4364,7 +4447,8 @@ function fetchUsersHist(){
   $mysqli->close();
 }
 
-function fetchAllHnoFromUsers(){
+function fetchAllHnoFromUsers()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $mysqli = connectDb();
@@ -4375,40 +4459,42 @@ function fetchAllHnoFromUsers(){
   $rt = unvList($mysqli, $sql);
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
-function sendAlfamiSmsCode(){
+function sendAlfamiSmsCode()
+{
   global $cgiAdrress;
   $phone_number = PRMS('phone_number');
 
-  $url = 
-    $cgiAdrress . "/py/alfami_smscode.py?" . 
+  $url =
+    $cgiAdrress . "/py/alfami_smscode.py?" .
     "phone_number=$phone_number";
-  
-  $options['ssl']['verify_peer']=false;
-  $options['ssl']['verify_peer_name']=false;
+
+  $options['ssl']['verify_peer'] = false;
+  $options['ssl']['verify_peer_name'] = false;
   $json = file_get_contents($url, false, stream_context_create($options));
   echo $json;
 }
 
 
-function getHolidays(){
+function getHolidays()
+{
   $year = PRMS('year');
   $v = @file_get_contents("https://holidays-jp.github.io/api/v1/$year/date.json");
-  
+
   if ($v === FALSE) {
     // stdClass()は空のJSONオブジェクトを生成します
     echo json_encode(['result' => false, 'dt' => new stdClass()]);
     return;
   }
-  
+
   echo json_encode(['result' => true, 'dt' => json_decode($v)]);
 }
-function getUsersTel(){
+function getUsersTel()
+{
   $phone = PRMS('phone');
   $phone = preg_replace("/[^0-9]/", "", $phone); // 数字以外の文字を除去
-  if (!$phone){
+  if (!$phone) {
     $rt['result'] = false;
     $rt['msg'] = 'parameter phone required.';
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -4459,17 +4545,17 @@ function getUsersTel(){
   $rt['dt'] = $filteredResults;
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
-function getOfiiceTelForSms(){
+function getOfiiceTelForSms()
+{
   $phone = PRMS('phone');
   // 現在の日付から
   $d = new DateTime();
   $yearMonth = $d->format('Y-m');
   $date = $yearMonth . "-01";
   $phone = preg_replace("/[^0-9]/", "", $phone); // 数字以外の文字を除去
-  if (!$phone){
+  if (!$phone) {
     $rt['result'] = false;
     $rt['msg'] = 'parameter phone required.';
     echo json_encode($rt, JSON_UNESCAPED_UNICODE);
@@ -4515,8 +4601,6 @@ function getOfiiceTelForSms(){
   $rt['dt'] = $filteredResults;
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
-
 }
 
 
@@ -4562,13 +4646,14 @@ function getOfiiceTelForSms(){
 //       $filteredResults[] = $row;
 //     }
 //   }
-  
+
 //   echo json_encode($filteredResults, JSON_UNESCAPED_UNICODE);
 //   $mysqli->close();
 // }
 
 
-function fetchSchBackupList(){
+function fetchSchBackupList()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $mysqli = connectDb();
@@ -4580,7 +4665,8 @@ function fetchSchBackupList(){
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
-function fetchSchBackup(){
+function fetchSchBackup()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $created = PRMS('created');
@@ -4596,7 +4682,8 @@ function fetchSchBackup(){
   $mysqli->close();
 }
 
-function fetchDailyReport(){
+function fetchDailyReport()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -4609,7 +4696,7 @@ function fetchDailyReport(){
   ";
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $rt['dt'][0]['dailyreport'] = json_decode($rt['dt'][0]['dailyreport']);
     // オブジェクトに新しいプロパティを追加
     $rt['dt'][0]['dailyreport']->timestamp = $rt['dt'][0]['timestamp'];
@@ -4619,7 +4706,8 @@ function fetchDailyReport(){
   $mysqli->close();
 }
 
-function sendPartOfDailyReport(){
+function sendPartOfDailyReport()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -4637,17 +4725,16 @@ function sendPartOfDailyReport(){
   // echo $sql;
   $rt = unvList($mysqli, $sql);
 
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $preSch = $rt['dt'][0]['dailyreport'];
-  }
-  else{
+  } else {
     $preSch = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
   }
 
-  if (!$preSch){
+  if (!$preSch) {
     echo '{"result":false}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   // echo ($preSch);
@@ -4657,7 +4744,7 @@ function sendPartOfDailyReport(){
     echo json_last_error_msg();
     echo '{"result":false, "error": "Invalid preSch JSON"}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -4665,26 +4752,25 @@ function sendPartOfDailyReport(){
   if (json_last_error() !== JSON_ERROR_NONE) {
     echo '{"result":false, "error": "Invalid partOfSch JSON"}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
   // ロック確認のために待機
   // sleep(SLEEP);
   // マージする配列があるかどうか確認
-  if (is_array($preSch) && is_array($partOfSch)){
+  if (is_array($preSch) && is_array($partOfSch)) {
     $merged = array_merge($preSch, $partOfSch);
-  }
-  else{
+  } else {
     echo '{"result":false}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
   // var_dump($merged);
   // echo('<br><br>');
   // echo ('final json<br>');
-  $finalJson = json_encode($merged, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  $finalJson = json_encode($merged, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   $finalJson = escapeChar($finalJson);
   $finalJson = mysqli_real_escape_string($mysqli, $finalJson);
 
@@ -4698,19 +4784,19 @@ function sendPartOfDailyReport(){
     on duplicate key update
     dailyreport = '$finalJson'
   ";
-  
+
   $rt = unvEdit($mysqli, $sql);
-  if ($rt['result']){
+  if ($rt['result']) {
     $mysqli->commit();
-  }
-  else{
+  } else {
     $mysqli->rollback();
   }
   $mysqli->close();
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
-function sendPartOfDailyReportWithKey(){
+function sendPartOfDailyReportWithKey()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -4735,24 +4821,24 @@ function sendPartOfDailyReportWithKey(){
 
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
-  
+
   $sql = "
     SELECT dailyreport FROM ahddailyreport 
     WHERE hid='$hid' AND bid='$bid' AND date='$date' FOR UPDATE;
   ";
-  
+
   $rt = unvList($mysqli, $sql);
 
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $preSch = $rt['dt'][0]['dailyreport'];
   } else {
     $preSch = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
   }
 
-  if (!$preSch){
+  if (!$preSch) {
     echo '{"result":false}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -4762,7 +4848,7 @@ function sendPartOfDailyReportWithKey(){
     echo json_last_error_msg();
     echo '{"result":false, "error": "Invalid preSch JSON"}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -4770,7 +4856,7 @@ function sendPartOfDailyReportWithKey(){
   if (json_last_error() !== JSON_ERROR_NONE) {
     echo '{"result":false, "error": "Invalid partOfRpt JSON"}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -4793,7 +4879,7 @@ function sendPartOfDailyReportWithKey(){
     ON DUPLICATE KEY UPDATE
     dailyreport = '$finalJson'
   ";
-  
+
   $rt = unvEdit($mysqli, $sql);
   if ($rt['result']) {
     $mysqli->commit();
@@ -4804,7 +4890,8 @@ function sendPartOfDailyReportWithKey(){
   echo json_encode($rt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
-function sendPartOfDailyReportWith2Key(){
+function sendPartOfDailyReportWith2Key()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -4830,24 +4917,24 @@ function sendPartOfDailyReportWith2Key(){
 
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
-  
+
   $sql = "
     SELECT dailyreport FROM ahddailyreport 
     WHERE hid='$hid' AND bid='$bid' AND date='$date' FOR UPDATE;
   ";
-  
+
   $rt = unvList($mysqli, $sql);
 
-  if (count($rt['dt'])){
+  if (count($rt['dt'])) {
     $preSch = $rt['dt'][0]['dailyreport'];
   } else {
     $preSch = '{}'; // 検索できなかったらエラーにせずに空白オブジェクト
   }
 
-  if (!$preSch){
+  if (!$preSch) {
     echo '{"result":false}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -4857,7 +4944,7 @@ function sendPartOfDailyReportWith2Key(){
     echo json_last_error_msg();
     echo '{"result":false, "error": "Invalid preSch JSON"}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -4865,7 +4952,7 @@ function sendPartOfDailyReportWith2Key(){
   if (json_last_error() !== JSON_ERROR_NONE) {
     echo '{"result":false, "error": "Invalid partOfRpt JSON"}';
     $mysqli->rollback();
-    $mysqli->close();    
+    $mysqli->close();
     return false;
   }
 
@@ -4882,7 +4969,7 @@ function sendPartOfDailyReportWith2Key(){
   foreach ($partOfRpt as $key => $value) {
     $preSch->$key1->$key2->$key = $value;
   }
-  
+
   $finalJson = json_encode($preSch, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   $finalJson = escapeChar($finalJson);
   $finalJson = mysqli_real_escape_string($mysqli, $finalJson);
@@ -4893,7 +4980,7 @@ function sendPartOfDailyReportWith2Key(){
     ON DUPLICATE KEY UPDATE
     dailyreport = '$finalJson'
   ";
-  
+
   $rt = unvEdit($mysqli, $sql);
   if ($rt['result']) {
     $mysqli->commit();
@@ -4907,7 +4994,8 @@ function sendPartOfDailyReportWith2Key(){
 
 
 
-function fetchScheduleTimeStamp(){
+function fetchScheduleTimeStamp()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -4925,7 +5013,8 @@ function fetchScheduleTimeStamp(){
   $mysqli->close();
 }
 
-function fetchDailyReportTimeStamp(){
+function fetchDailyReportTimeStamp()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -4943,7 +5032,8 @@ function fetchDailyReportTimeStamp(){
   $mysqli->close();
 }
 
-function fetchHidBidByJino () {
+function fetchHidBidByJino()
+{
   $jino = PRMS('jino');
   $date = PRMS('date');
   $mysqli = connectDb();
@@ -4958,7 +5048,8 @@ function fetchHidBidByJino () {
   $mysqli->close();
 }
 
-function fetchTimeStamps () {
+function fetchTimeStamps()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $date = PRMS('date');
@@ -4973,11 +5064,11 @@ function fetchTimeStamps () {
   ";
   $t = unvList($mysqli, $sql);
   $rt = $t;
-  if (isset($t['dt']) && isset($t['dt'][0])){
+  if (isset($t['dt']) && isset($t['dt'][0])) {
     $rt['dt'][0]['ahddailyreport'] = $t['dt'][0]['timestamp'];
     $rt['dt'][0]['ahddailyreportStr'] = $t['dt'][0]['timestampStr'];
   };
-  
+
   if (isset($t['sql'])) {
     $sqls[] = $t['sql'];
   }
@@ -4989,7 +5080,7 @@ function fetchTimeStamps () {
     and date = '$date'
   ";
   $t = unvList($mysqli, $sql);
-  if (isset($t['dt']) && isset($t['dt'][0])){
+  if (isset($t['dt']) && isset($t['dt'][0])) {
     $rt['dt'][0]['ahdschedule'] = $t['dt'][0]['timestamp'];
     $rt['dt'][0]['ahdscheduleStr'] = $t['dt'][0]['timestampStr'];
   }
@@ -5004,7 +5095,7 @@ function fetchTimeStamps () {
     and date = '$date'
   ";
   $t = unvList($mysqli, $sql);
-  if (isset($t['dt']) && isset($t['dt'][0])){
+  if (isset($t['dt']) && isset($t['dt'][0])) {
     $rt['dt'][0]['ahdcontacts'] = $t['dt'][0]['timestamp'];
     $rt['dt'][0]['ahdcontactsStr'] = $t['dt'][0]['timestampStr'];
   }
@@ -5016,10 +5107,10 @@ function fetchTimeStamps () {
   }
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
-
 }
 
-function fetchUniqBids () {
+function fetchUniqBids()
+{
   $mysqli = connectDb();
 
   $sql = "
@@ -5030,7 +5121,8 @@ function fetchUniqBids () {
   $mysqli->close();
 }
 
-function fetchUsersPlan(){
+function fetchUsersPlan()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -5039,12 +5131,12 @@ function fetchUsersPlan(){
   $month = PRMS('month');
   $lastmonth = PRMS('lastmonth');
   $limit = PRMS('limit');
-  
+
   // 基本クエリ
   $sql = "SELECT hid, bid, uid, created, item, content, timestamp
           FROM ahdUsersPlan 
           WHERE hid='{$hid}' AND bid='{$bid}'";
-  
+
   // オプショナルパラメータ
   if (!empty($uid)) {
     $sql .= " AND uid='{$uid}'";
@@ -5067,7 +5159,7 @@ function fetchUsersPlan(){
     $sql .= " limit 0, {$limit}";
   }
   // lastmanthを指定するときはlimitを指定しない
-  if (empty($lastmonth)){
+  if (empty($lastmonth)) {
     $sql .= " limit 0, 10";
   }
 
@@ -5075,7 +5167,7 @@ function fetchUsersPlan(){
   $rt = unvList($mysqli, $sql); // unvList関数にSQLクエリを直接渡す
   if (isset($rt['dt']) && count($rt['dt'])) {
     foreach ($rt['dt'] as $key => $value) {
-      if(isset($value['content'])) {
+      if (isset($value['content'])) {
         $rt['dt'][$key]['content'] = json_decode($value['content'], true);
       }
     }
@@ -5084,7 +5176,8 @@ function fetchUsersPlan(){
   $mysqli->close();
 }
 
-function sendUsersPlan(){
+function sendUsersPlan()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -5103,7 +5196,8 @@ function sendUsersPlan(){
   $mysqli->close();
 }
 
-function deleteUsersPlan(){
+function deleteUsersPlan()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -5119,10 +5213,10 @@ function deleteUsersPlan(){
   ";
 
   // itemが指定されている場合は条件に追加
-  if($item !== ''){
+  if ($item !== '') {
     $sql .= " AND item = '$item'";
   }
-  
+
   $sql .= ";";
 
   $rt = unvEdit($mysqli, $sql);
@@ -5130,7 +5224,8 @@ function deleteUsersPlan(){
   $mysqli->close();
 }
 
-function sendLog(){
+function sendLog()
+{
   $hid = PRMS('hid');
   $bid = PRMS('bid');
   $uid = PRMS('uid');
@@ -5163,10 +5258,11 @@ function sendLog(){
 //   $mysqli->close();
 // }
 
-function fetchUsersIdByLineId(){
+function fetchUsersIdByLineId()
+{
   $lineid = PRMS('lineid');
   $date = PRMS('date'); // 必要に応じて日付を設定してください
-  
+
   $sql = "
     select user.*, 
       uext.ext, 
@@ -5208,7 +5304,7 @@ function fetchUsersIdByLineId(){
       WHERE bid=filtered.bid and hid=filtered.hid and date<='$date'
     )
   ";
-  
+
   $mysqli = connectDb();
   $rt = unvList($mysqli, $sql);
   $jsn = json_encode(escapeChar($rt), JSON_UNESCAPED_UNICODE);
@@ -5216,7 +5312,8 @@ function fetchUsersIdByLineId(){
   $mysqli->close();
 }
 
-function fetchWaitingMsg(){
+function fetchWaitingMsg()
+{
   $date = PRMS('date');
   $after = PRMS('after');
   $sql = "
@@ -5293,7 +5390,8 @@ function fetchWaitingMsg(){
   $mysqli->close();
 }
 
-function sendPartOfData() {
+function sendPartOfData()
+{
   $table = PRMS('table');
   $column = PRMS('column');
   $hid = PRMS('hid');
@@ -5305,103 +5403,104 @@ function sendPartOfData() {
   $mysqli->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
 
   try {
-      $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+    $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
 
-      // テーブル名とカラム名をバッククォートで囲む
-      $sql = "
+    // テーブル名とカラム名をバッククォートで囲む
+    $sql = "
           SELECT `$column` FROM `$table`
           WHERE hid = ? AND bid = ? AND date = ?
           FOR UPDATE
       ";
-      $stmt = $mysqli->prepare($sql);
-      if (!$stmt) {
-          echo '{"result":false, "error": "SQL Prepare failed: ' . $mysqli->error . '"}';
-          return false;
-      }
+    $stmt = $mysqli->prepare($sql);
+    if (!$stmt) {
+      echo '{"result":false, "error": "SQL Prepare failed: ' . $mysqli->error . '"}';
+      return false;
+    }
 
-      $stmt->bind_param("sss", $hid, $bid, $date);
-      $stmt->execute();
-      $result = $stmt->get_result();
-      $existingData = $result->fetch_assoc()[$column] ?? null;
+    $stmt->bind_param("sss", $hid, $bid, $date);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $existingData = $result->fetch_assoc()[$column] ?? null;
 
-      if (!$existingData) {
-          echo '{"result":false, "error": "Exist data not found."}';
-          $mysqli->rollback();
-          $stmt->close();
-          $mysqli->close();
-          return false;
-      }
+    if (!$existingData) {
+      echo '{"result":false, "error": "Exist data not found."}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
 
-      // JSON デコードとエラーチェック
-      $existingData = json_decode($existingData, true);
-      if (json_last_error() !== JSON_ERROR_NONE) {
-          error_log("JSON Decode Error (existingData): " . json_last_error_msg());
-          echo '{"result":false, "error": "Invalid existingData JSON"}';
-          $mysqli->rollback();
-          $stmt->close();
-          $mysqli->close();
-          return false;
-      }
+    // JSON デコードとエラーチェック
+    $existingData = json_decode($existingData, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      error_log("JSON Decode Error (existingData): " . json_last_error_msg());
+      echo '{"result":false, "error": "Invalid existingData JSON"}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
 
-      $partialData = json_decode($partOfData, true);
-      if (json_last_error() !== JSON_ERROR_NONE) {
-          error_log("JSON Decode Error (partOfData): " . json_last_error_msg());
-          echo '{"result":false, "error": "Invalid partOfData JSON"}';
-          $mysqli->rollback();
-          $stmt->close();
-          $mysqli->close();
-          return false;
-      }
+    $partialData = json_decode($partOfData, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      error_log("JSON Decode Error (partOfData): " . json_last_error_msg());
+      echo '{"result":false, "error": "Invalid partOfData JSON"}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
 
-      // データをマージ
-      $mergedData = recursiveMerge($existingData, $partialData);
+    // データをマージ
+    $mergedData = recursiveMerge($existingData, $partialData);
 
-      // JSON エンコードとエラーチェック
-      $finalJson = json_encode($mergedData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-      if (json_last_error() !== JSON_ERROR_NONE) {
-          error_log("JSON Encode Error: " . json_last_error_msg());
-          echo '{"result":false, "error": "JSON encoding failed"}';
-          $mysqli->rollback();
-          $stmt->close();
-          $mysqli->close();
-          return false;
-      }
+    // JSON エンコードとエラーチェック
+    $finalJson = json_encode($mergedData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      error_log("JSON Encode Error: " . json_last_error_msg());
+      echo '{"result":false, "error": "JSON encoding failed"}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
 
-      // プリペアドステートメントで安全な INSERT 文
-      $updateStmt = $mysqli->prepare("
+    // プリペアドステートメントで安全な INSERT 文
+    $updateStmt = $mysqli->prepare("
           INSERT INTO `$table` (hid, bid, date, `$column`)
           VALUES (?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE `$column` = VALUES(`$column`)
       ");
-      if (!$updateStmt) {
-          echo '{"result":false, "error": "SQL Prepare failed (update): ' . $mysqli->error . '"}';
-          return false;
-      }
+    if (!$updateStmt) {
+      echo '{"result":false, "error": "SQL Prepare failed (update): ' . $mysqli->error . '"}';
+      return false;
+    }
 
-      $updateStmt->bind_param("ssss", $hid, $bid, $date, $finalJson);
-      $updateResult = $updateStmt->execute();
+    $updateStmt->bind_param("ssss", $hid, $bid, $date, $finalJson);
+    $updateResult = $updateStmt->execute();
 
-      if ($updateResult) {
-          $mysqli->commit();
-          echo '{"result":true}';
-      } else {
-          error_log("SQL Error (update): " . $updateStmt->error);
-          $mysqli->rollback();
-          echo '{"result":false, "error": "Database update failed"}';
-      }
-
-      $stmt->close();
-      $updateStmt->close();
-      $mysqli->close();
-  } catch (Exception $e) {
-      error_log("Transaction failed: " . $e->getMessage());
+    if ($updateResult) {
+      $mysqli->commit();
+      echo '{"result":true}';
+    } else {
+      error_log("SQL Error (update): " . $updateStmt->error);
       $mysqli->rollback();
-      $mysqli->close();
-      echo '{"result":false, "error": "Transaction failed"}';
+      echo '{"result":false, "error": "Database update failed"}';
+    }
+
+    $stmt->close();
+    $updateStmt->close();
+    $mysqli->close();
+  } catch (Exception $e) {
+    error_log("Transaction failed: " . $e->getMessage());
+    $mysqli->rollback();
+    $mysqli->close();
+    echo '{"result":false, "error": "Transaction failed"}';
   }
 }
 
-function deletePartOfData() {
+function deletePartOfData()
+{
   $table = PRMS('table');
   $column = PRMS('column');
   $hid = PRMS('hid');
@@ -5410,135 +5509,484 @@ function deletePartOfData() {
   $keyToDelete = json_decode(PRMS('keyToDelete'), true); // JSON デコード
 
   if (json_last_error() !== JSON_ERROR_NONE) {
-      echo '{"result":false, "error": "Invalid keyToDelete format"}';
-      return false;
+    echo '{"result":false, "error": "Invalid keyToDelete format"}';
+    return false;
   }
 
   $mysqli = connectDb();
   $mysqli->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
 
   try {
-      $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+    $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
 
-      // SELECT 文で現在のデータを取得
-      $sql = "
+    // SELECT 文で現在のデータを取得
+    $sql = "
           SELECT `$column` FROM `$table`
           WHERE hid = ? AND bid = ? AND date = ?
           FOR UPDATE
       ";
-      $stmt = $mysqli->prepare($sql);
-      if (!$stmt) {
-          echo '{"result":false, "error": "SQL Prepare failed: ' . $mysqli->error . '"}';
-          return false;
+    $stmt = $mysqli->prepare($sql);
+    if (!$stmt) {
+      echo '{"result":false, "error": "SQL Prepare failed: ' . $mysqli->error . '"}';
+      return false;
+    }
+
+    $stmt->bind_param("sss", $hid, $bid, $date);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $existingData = $result->fetch_assoc()[$column] ?? null;
+
+    if (!$existingData) {
+      echo '{"result":false, "message": "No data found for the specified record."}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
+
+    $existingData = json_decode($existingData, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      error_log("JSON Decode Error: " . json_last_error_msg());
+      echo '{"result":false, "error": "Invalid existingData JSON"}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
+
+    // JSON 内のキーを削除
+    $current = &$existingData;
+    $lastKey = array_pop($keyToDelete); // 削除対象の最終キー
+    foreach ($keyToDelete as $key) {
+      if (!isset($current[$key]) || !is_array($current[$key])) {
+        echo '{"result":false, "message": "No matching key found"}';
+        $mysqli->rollback();
+        $stmt->close();
+        $mysqli->close();
+        return false;
       }
+      $current = &$current[$key];
+    }
 
-      $stmt->bind_param("sss", $hid, $bid, $date);
-      $stmt->execute();
-      $result = $stmt->get_result();
-      $existingData = $result->fetch_assoc()[$column] ?? null;
+    // 最終キーを削除
+    if (isset($current[$lastKey])) {
+      $deletedValue = $current[$lastKey];
+      unset($current[$lastKey]);
 
-      if (!$existingData) {
-          echo '{"result":false, "message": "No data found for the specified record."}';
-          $mysqli->rollback();
-          $stmt->close();
-          $mysqli->close();
-          return false;
-      }
+      // 空の配列やオブジェクトを削除
+      $current = array_filter($current, function ($value) {
+        return !empty($value);
+      });
+    } else {
+      echo '{"result":false, "message": "No matching key found"}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
 
-      $existingData = json_decode($existingData, true);
-      if (json_last_error() !== JSON_ERROR_NONE) {
-          error_log("JSON Decode Error: " . json_last_error_msg());
-          echo '{"result":false, "error": "Invalid existingData JSON"}';
-          $mysqli->rollback();
-          $stmt->close();
-          $mysqli->close();
-          return false;
-      }
+    // 更新後のデータを JSON にエンコード
+    $finalJson = json_encode($existingData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      error_log("JSON Encode Error: " . json_last_error_msg());
+      echo '{"result":false, "error": "JSON encoding failed"}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
 
-      // JSON 内のキーを削除
-      $current = &$existingData;
-      $lastKey = array_pop($keyToDelete); // 削除対象の最終キー
-      foreach ($keyToDelete as $key) {
-          if (!isset($current[$key]) || !is_array($current[$key])) {
-              echo '{"result":false, "message": "No matching key found"}';
-              $mysqli->rollback();
-              $stmt->close();
-              $mysqli->close();
-              return false;
-          }
-          $current = &$current[$key];
-      }
-
-      // 最終キーを削除
-      if (isset($current[$lastKey])) {
-          $deletedValue = $current[$lastKey];
-          unset($current[$lastKey]);
-
-          // 空の配列やオブジェクトを削除
-          $current = array_filter($current, function ($value) {
-              return !empty($value);
-          });
-      } else {
-          echo '{"result":false, "message": "No matching key found"}';
-          $mysqli->rollback();
-          $stmt->close();
-          $mysqli->close();
-          return false;
-      }
-
-      // 更新後のデータを JSON にエンコード
-      $finalJson = json_encode($existingData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-      if (json_last_error() !== JSON_ERROR_NONE) {
-          error_log("JSON Encode Error: " . json_last_error_msg());
-          echo '{"result":false, "error": "JSON encoding failed"}';
-          $mysqli->rollback();
-          $stmt->close();
-          $mysqli->close();
-          return false;
-      }
-
-      // UPDATE 文でデータを更新
-      $updateStmt = $mysqli->prepare("
+    // UPDATE 文でデータを更新
+    $updateStmt = $mysqli->prepare("
           UPDATE `$table`
           SET `$column` = ?
           WHERE hid = ? AND bid = ? AND date = ?
       ");
-      if (!$updateStmt) {
-          echo '{"result":false, "error": "SQL Prepare failed (update): ' . $mysqli->error . '"}';
-          return false;
-      }
+    if (!$updateStmt) {
+      echo '{"result":false, "error": "SQL Prepare failed (update): ' . $mysqli->error . '"}';
+      return false;
+    }
 
-      $updateStmt->bind_param("ssss", $finalJson, $hid, $bid, $date);
-      $updateResult = $updateStmt->execute();
+    $updateStmt->bind_param("ssss", $finalJson, $hid, $bid, $date);
+    $updateResult = $updateStmt->execute();
 
-      if ($updateResult) {
-          $mysqli->commit();
-          echo json_encode([
-              "result" => true,
-              "deleted" => ["key" => array_merge($keyToDelete, [$lastKey]), "value" => $deletedValue]
-          ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-      } else {
-          error_log("SQL Error (update): " . $updateStmt->error);
-          $mysqli->rollback();
-          echo '{"result":false, "error": "Database update failed"}';
-      }
-
-      $stmt->close();
-      $updateStmt->close();
-      $mysqli->close();
-  } catch (Exception $e) {
-      error_log("Transaction failed: " . $e->getMessage());
+    if ($updateResult) {
+      $mysqli->commit();
+      echo json_encode([
+        "result" => true,
+        "deleted" => ["key" => array_merge($keyToDelete, [$lastKey]), "value" => $deletedValue]
+      ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } else {
+      error_log("SQL Error (update): " . $updateStmt->error);
       $mysqli->rollback();
-      $mysqli->close();
-      echo '{"result":false, "error": "Transaction failed"}';
+      echo '{"result":false, "error": "Database update failed"}';
+    }
+
+    $stmt->close();
+    $updateStmt->close();
+    $mysqli->close();
+  } catch (Exception $e) {
+    error_log("Transaction failed: " . $e->getMessage());
+    $mysqli->rollback();
+    $mysqli->close();
+    echo '{"result":false, "error": "Transaction failed"}';
   }
+}
+
+function fetchLineNames() {
+  $mysqli = connectDb();
+
+  // すべてのカラムを含めて GROUP BY したレコード件数を取得
+  $groupByAllSQL = "
+      SELECT lineName, displayName, accessToken, lineID
+      FROM ahdOfficialLineAccount
+      GROUP BY lineName, displayName, accessToken, lineID;
+  ";
+
+  // lineName だけで GROUP BY したレコード件数を取得
+  $groupByLineNameSQL = "
+      SELECT lineName
+      FROM ahdOfficialLineAccount
+      GROUP BY lineName;
+  ";
+
+  // クエリ実行
+  $groupByAllResult = unvList($mysqli, $groupByAllSQL);
+  $groupByLineNameResult = unvList($mysqli, $groupByLineNameSQL);
+
+  // 件数を比較
+  $totalAll = count($groupByAllResult['dt']);
+  $totalLineName = count($groupByLineNameResult['dt']);
+
+  // 件数が一致しない場合はエラー
+  if ($totalAll != $totalLineName) {
+      echo json_encode(["result" => false, "error" => "Duplicate data found."]);
+      $mysqli->close();
+      return;
+  }
+
+  // 重複がなければ lineName と displayName を取得
+  $fetchSQL = "
+      SELECT DISTINCT lineName, displayName
+      FROM ahdOfficialLineAccount;
+  ";
+
+  $dataResult = unvList($mysqli, $fetchSQL);
+
+  echo json_encode($dataResult, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+function fetchLineAccount() {
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+
+  $mysqli = connectDb();
+
+  // 対応するレコードを取得
+  $fetchSQL = "
+      SELECT lineName, displayName, accessToken, lineID
+      FROM ahdOfficialLineAccount
+      WHERE hid = '$hid' AND bid = '$bid';
+  ";
+
+  $dataResult = unvList($mysqli, $fetchSQL);
+
+  // 結果をそのまま返す
+  echo json_encode($dataResult, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+function fetchLineNameList() {
+  $lineName = PRMS('lineName');
+
+  $mysqli = connectDb();
+
+  // 特定の lineName を持つリストを取得
+  $fetchSQL = "
+      SELECT hid, bid, lineName, displayName
+      FROM ahdOfficialLineAccount
+      WHERE lineName = '$lineName';
+  ";
+
+  $dataResult = unvList($mysqli, $fetchSQL);
+
+  // 結果をそのまま返す
+  echo json_encode($dataResult, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+function sendNewBrunchForLineAccount() {
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $lineName = PRMS('lineName');
+
+  $mysqli = connectDb();
+
+  // hid, bid が既存かチェック
+  $checkExistSQL = "
+      SELECT COUNT(*) as cnt
+      FROM ahdOfficialLineAccount
+      WHERE hid = '$hid' AND bid = '$bid';
+  ";
+
+  $existResult = unvList($mysqli, $checkExistSQL);
+
+  if ($existResult['result'] && $existResult['dt'][0]['cnt'] > 0) {
+      echo json_encode(["result" => false, "error" => "Specified hid and bid already exist."]);
+      $mysqli->close();
+      return;
+  }
+
+  // lineName が既存かチェックして displayName, accessToken, lineID を取得
+  $checkSQL = "
+      SELECT displayName, accessToken, lineID
+      FROM ahdOfficialLineAccount
+      WHERE lineName = '$lineName';
+  ";
+
+  $checkResult = unvList($mysqli, $checkSQL);
+
+  if (!$checkResult['result'] || count($checkResult['dt']) == 0) {
+      echo json_encode(["result" => false, "error" => "Specified lineName does not exist."]);
+      $mysqli->close();
+      return;
+  }
+
+  // displayName, accessToken, lineID を取得
+  $displayName = $checkResult['dt'][0]['displayName'];
+  $accessToken = $checkResult['dt'][0]['accessToken'];
+  $lineID = $checkResult['dt'][0]['lineID'];
+
+  // 新しいレコードを追加（unvEditを使用）
+  $insertSQL = "
+      INSERT INTO ahdOfficialLineAccount (hid, bid, lineName, displayName, accessToken, lineID)
+      VALUES ('$hid', '$bid', '$lineName', '$displayName', '$accessToken', '$lineID');
+  ";
+
+  // unvEditの結果をそのまま返す
+  $rt = unvEdit($mysqli, $insertSQL);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
 }
 
 
 
 
+/**
+ * テーブル「ahdschedule」などのJSONカラムから特定キーの階層を抽出し返却する
+ * パラメータは PRMS() 経由で取得する
+ * 
+ * 事前に定義されている前提の関数:
+ *  - PRMS($key, $prmsAllowGet = false)
+ *  - connectDb()  // DB接続を返す
+ *  - unvList($mysqli, $sql)  // クエリ実行して { result, dt } を返す
+ *
+ * リクエストパラメータ例:
+ *  - a=fetchPartOfData
+ *  - table=ahdschedule
+ *  - tableKeys={"hid":"0khROPje","bid":"MwV6HuPm","date":"2023-04-01"}
+ *  - column=schedule
+ *  - jsonKeys=["UID19"]
+ */
+function fetchPartOfData()
+{
+  // ==== パラメータ取得 ====
+  $table        = PRMS('table');         // 例: "ahdschedule"
+  $tableKeysJson = PRMS('tableKeys');    // 例: '{"hid":"0khROPje","bid":"MwV6HuPm","date":"2023-04-01"}'
+  $column       = PRMS('column');        // 例: "schedule"
+  $jsonKeysJson = PRMS('jsonKeys');      // 例: '["UID19"]'
 
-function nothing(){
+  // ==== JSONを配列やリストに変換 ====
+  $tableKeys = json_decode($tableKeysJson, true);
+  if (!is_array($tableKeys)) {
+    // tableKeys が不正な場合
+    $rt = [
+      'result' => false,
+      'error' => 'tableKeys が不正なJSONです。'
+    ];
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    return;
+  }
+
+  $jsonKeys = json_decode($jsonKeysJson, true);
+  if (!is_array($jsonKeys)) {
+    // jsonKeys が不正な場合
+    $rt = [
+      'result' => false,
+      'error' => 'jsonKeys が不正なJSONです。'
+    ];
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    return;
+  }
+
+  // ==== DB接続 ====
+  $mysqli = connectDb();
+
+  // ==== timestamp列の存在チェック ====
+  $hasTimestamp = false;
+  $colCheckSql = "SHOW COLUMNS FROM `{$table}`";
+  if ($resCol = $mysqli->query($colCheckSql)) {
+    while ($rowCol = $resCol->fetch_assoc()) {
+      if ($rowCol['Field'] === 'timestamp') {
+        $hasTimestamp = true;
+        break;
+      }
+    }
+  }
+
+  // ==== WHERE句作成 ====
+  $whereArray = [];
+  foreach ($tableKeys as $k => $v) {
+    $escVal = $mysqli->real_escape_string($v);
+    $whereArray[] = "`{$k}` = '{$escVal}'";
+  }
+  $whereStr = implode(' AND ', $whereArray);
+
+  // ==== SELECT句 ====
+  // 必要なカラムは JSONカラムのみでOKだが、エラー確認用に
+  // hid,bid,date なども取ってもいい。しかし今回は不要なので必要最小限にします
+  // ※複数取っても後で捨てるなら問題ありませんが、ここではシンプルに。
+  $selectCols = "`{$column}`";
+  if ($hasTimestamp) {
+    // timestamp もある場合だけ取る（が今回は使用しない）
+    $selectCols .= ", UNIX_TIMESTAMP(`timestamp`) * 1000 AS rowTimestamp";
+  }
+
+  $sql = "
+    SELECT {$selectCols}
+    FROM `{$table}`
+    WHERE {$whereStr}
+  ";
+
+  // ==== クエリ実行 ====
+  $rt = unvList($mysqli, $sql);
+  if (!$rt['result']) {
+    // SQLエラー
+    $rt['error'] = 'SQLエラーが発生しました。';
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    $mysqli->close();
+    return;
+  }
+
+  // ==== レコード件数チェック ====
+  $count = count($rt['dt']);
+  if ($count === 0) {
+    // 該当なし
+    $rt['result'] = false;
+    $rt['error'] = '該当レコードがありません。';
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    $mysqli->close();
+    return;
+  }
+  if ($count > 1) {
+    // 複数あり -> エラー
+    $rt['result'] = false;
+    $rt['error'] = '複数のレコードが見つかったため特定できません。';
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    $mysqli->close();
+    return;
+  }
+
+  // ==== 1件のレコードを処理 ====
+  $row = $rt['dt'][0];
+  $jsonStr = $row[$column];
+
+  // '[]' を '{}' に置換
+  if ($jsonStr === '[]') {
+    $jsonStr = '{}';
+  }
+
+  // JSONデコード
+  $decodedJson = json_decode($jsonStr, true);
+  if (!is_array($decodedJson)) {
+    // JSON不正の場合は空オブジェクトに
+    $decodedJson = [];
+  }
+
+  // ==== jsonKeys で指定された階層を辿る ====
+  $filteredData = $decodedJson;
+  foreach ($jsonKeys as $jk) {
+    if (isset($filteredData[$jk])) {
+      $filteredData = $filteredData[$jk];
+    } else {
+      // 存在しないキーなら空オブジェクトを返す
+      $filteredData = new stdClass();
+      break;
+    }
+  }
+
+  // ここで $rt は不要なカラムを含むため、最低限の構造にリセットして返す。
+  // 必要であれば 'result' はそのまま保持し、 'dt' だけ作り直す。
+  $resultValue = true; // ここまで来れば結果はtrue
+  $rt = [
+    'result' => $resultValue,
+    'dt' => [
+      [
+        // filteredData のみ返却
+        'filteredData' => $filteredData,
+      ]
+    ],
+  ];
+
+  // ==== JSONとして返却 ====
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+
+
+
+function fetchLineIdList() {
+  $lineID = urldecode(PRMS('lineID'));
+
+  $mysqli = connectDb();
+
+  // lineID に合致するリストを取得
+  $fetchSQL = "
+      SELECT hid, bid, lineName, displayName, accessToken, lineID
+      FROM ahdOfficialLineAccount
+      WHERE lineID = '$lineID';
+  ";
+
+  $dataResult = unvList($mysqli, $fetchSQL);
+
+  // 結果をそのまま返す
+  echo json_encode($dataResult, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+// 銀行情報取得API
+// 銀行コードだけだったら銀行名を返す
+// 支店コードもあったら支店名を返す
+function fetchBankInfo(): void
+{
+  $bankcode = PRMS('bankcode', true);
+  $branchcode = PRMS('branchcode', true);
+
+  if ($branchcode) {
+    $url = "https://bank.teraren.com/banks/$bankcode/branches/$branchcode.json";
+  } else {
+    $url = "https://bank.teraren.com/banks/$bankcode.json";
+  }
+
+  $json = file_get_contents($url);
+  $json = mb_convert_encoding($json, 'UTF8', 'ASCII,JIS,UTF-8,EUC-JP,SJIS-WIN');
+  $ary = json_decode($json, true);
+
+  // Add 'result: true' to the response
+  if (is_array($ary)) {
+    $ary['result'] = true;
+    echo json_encode($ary, JSON_UNESCAPED_UNICODE);
+  } else {
+    // If decoding fails or the response is not an array, return the original JSON
+    echo $json;
+  }
+}
+
+
+function nothing()
+{
   $rt['msg'] = 'function not found.';
   $rt['request'] = $_REQUEST;
   $rt['post'] = $_POST;
@@ -5546,6 +5994,8 @@ function nothing(){
   $rt['headers'] = apache_request_headers();
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
 }
+
+
 
 
 $m = PRMS('a', true);
@@ -5724,7 +6174,18 @@ else if ($m == 'sendLog') sendLog();
 else if ($m == 'sendPartOfData') sendPartOfData();
 else if ($m == 'deletePartOfData') deletePartOfData();
 
+// 汎用JSON取得
+else if ($m == 'fetchPartOfData') fetchPartOfData();
+
+// lineアカウント関連
+else if ($m == 'fetchLineNames') fetchLineNames();
+else if ($m == 'fetchLineAccount') fetchLineAccount();
+else if ($m == 'fetchLineNameList') fetchLineNameList();
+else if ($m == 'sendNewBrunchForLineAccount') sendNewBrunchForLineAccount();
+else if ($m == 'fetchLineIdList') fetchLineIdList();
+
+// 銀行情報
+else if ($m == 'fetchBankInfo') fetchBankInfo();
 
 
 else nothing();
-?>

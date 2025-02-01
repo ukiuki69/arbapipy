@@ -55,18 +55,28 @@ function escapeChar($str)
   return $cnv;
 }
 
-function recursiveMerge($array1, $array2)
+function recursiveMerge(array $array1, array $array2, int $limit = 2, int $currentDepth = 1)
 {
-  foreach ($array2 as $key => $value) {
-    if (array_key_exists($key, $array1) && is_array($array1[$key]) && is_array($value)) {
-      $array1[$key] = recursiveMerge($array1[$key], $value);
-    } else {
-      $array1[$key] = $value;
+    foreach ($array2 as $key => $value) {
+        // まだ再帰可能かつ両方配列なら再帰を継続
+        if ($currentDepth < $limit
+            && array_key_exists($key, $array1)
+            && is_array($array1[$key])
+            && is_array($value)
+        ) {
+            $array1[$key] = recursiveMerge(
+                $array1[$key],
+                $value,
+                $limit,
+                $currentDepth + 1
+            );
+        } else {
+            // それ以外は上書きする
+            $array1[$key] = $value;
+        }
     }
-  }
-  return $array1;
+    return $array1;
 }
-
 // 使用状況により切り替えるため
 function PRMS($key, $prmsAllowGet = false)
 {
@@ -803,7 +813,7 @@ function sendPartOfContact()
     $bid = $preSearch['bid'];
   }
   $state = $mysqli->real_escape_string(PRMS('partOfContact'));
-  $keep = 14;
+  $keep = 4;
   $item = 'sendpartofcontent_log';
   $sql = "
     insert into ahdLog (hid,bid,date,state,item,keep)
@@ -973,7 +983,7 @@ function sendOneMessageOfContact()
   }
 
   $state = $mysqli->real_escape_string(PRMS('partOfContact'));
-  $keep = 14;
+  $keep = 4;
   $item = 'sendpartofcontent_log';
   $sql = "
     insert into ahdLog (hid,bid,date,state,item,keep)
@@ -1116,7 +1126,7 @@ function sendDtUnderUidOfContact()
   }
 
   $state = $mysqli->real_escape_string(PRMS('partOfContact'));
-  $keep = 14;
+  $keep = 4;
   $item = 'sendpartofcontent_log';
   $sql = "
     insert into ahdLog (hid,bid,date,state,item,keep)
@@ -2142,25 +2152,35 @@ function getAccount()
   $mysqli->close();
 }
 
+// ログインなどの失敗回数をカウントする
+function getCountAttempts()
+{
+  $ip_address = $_SERVER['REMOTE_ADDR']; // クライアントのIPアドレスを取得
+  $interval_minutes = PRMS('interval_minutes');
+  $interval_minutes = ($interval_minutes === '') ? 10 : $interval_minutes;  
+  $mysqli = connectDb();
+  $sql = "
+    SELECT attempt_count count FROM ahdAttempts 
+    WHERE ip_address = '$ip_address' 
+    AND attempt_time >= NOW() - INTERVAL $interval_minutes MINUTE;
+  ";
+  $rt = unvList($mysqli, $sql);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
 // メールアドレスとパスワードのみでアカウントを検索する
 // 複数の事業所が返ってくることを想定
 function getAccountByPw()
 {
   $mail = PRMS('mail');
+  $interval_minutes = PRMS('interval_minutes');
+  $interval_minutes = ($interval_minutes === '') ? 10 : $interval_minutes;
   $pass = encodeCph(PRMS('passwd'));
   $mysqli = connectDb();
-  // $sql = "
-  //   select 
-  //     account.mail, account.lname,account.fname ,
-  //     account.hid, account.bid,
-  //     brunch.bname, brunch.sbname, brunch.jino,  
-  //     com.hname, com.shname
-  //   from ahdaccount as account
-  //   join ahdbrunch brunch using (hid, bid)
-  //   join ahdcompany com using (hid)
-  //   where passwd = '$pass'
-  //   and mail = '$mail';
-  // ";
+  $ip_address = $_SERVER['REMOTE_ADDR']; // クライアントのIPアドレスを取得
+
+
   $sql = "
     select 
       account.mail, account.lname,account.fname ,
@@ -2180,10 +2200,51 @@ function getAccountByPw()
     and mail = '$mail';
   ";
 
-
   $rt = unvList($mysqli, $sql);
-  // $rt[dt][0]['passwd'] = decodeCph($rt[dt][0]['passwd']);
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+
+  if (count($rt['dt']) === 0) {
+    // 古い試行記録を削除
+    $sql_delete_old_attempts = "
+      DELETE FROM ahdAttempts 
+      WHERE attempt_time < NOW() - INTERVAL $interval_minutes MINUTE;
+    ";
+    $mysqli->query($sql_delete_old_attempts);
+
+    // 試行回数を記録
+    $sql_attempt = "
+      INSERT INTO ahdAttempts (ip_address, attempt_count)
+      VALUES ('$ip_address', 1)
+      ON DUPLICATE KEY UPDATE attempt_count = attempt_count + 1;
+    ";
+    $mysqli->query($sql_attempt);
+
+    // 認証失敗時の処理
+    $sql_count = "
+      SELECT attempt_count 
+      FROM ahdAttempts 
+      WHERE ip_address = '$ip_address'
+      AND attempt_time >= NOW() - INTERVAL $interval_minutes MINUTE;
+    ";
+    $result = $mysqli->query($sql_count);
+    $row = $result->fetch_assoc();
+    $attempt_count = $row['attempt_count'];
+
+    $rt['attempt_count'] = $attempt_count;
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  } else {
+    // 認証成功時の処理
+    $rt['attempt_count'] = 0;
+    
+    // 該当レコードを削除
+    $sql_delete_attempts = "
+        DELETE FROM ahdAttempts 
+        WHERE ip_address = '$ip_address';
+    ";
+    $mysqli->query($sql_delete_attempts);
+
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  }
+
   $mysqli->close();
 }
 
@@ -5760,6 +5821,173 @@ function sendNewBrunchForLineAccount() {
   $mysqli->close();
 }
 
+
+
+
+/**
+ * テーブル「ahdschedule」などのJSONカラムから特定キーの階層を抽出し返却する
+ * パラメータは PRMS() 経由で取得する
+ * 
+ * 事前に定義されている前提の関数:
+ *  - PRMS($key, $prmsAllowGet = false)
+ *  - connectDb()  // DB接続を返す
+ *  - unvList($mysqli, $sql)  // クエリ実行して { result, dt } を返す
+ *
+ * リクエストパラメータ例:
+ *  - a=fetchPartOfData
+ *  - table=ahdschedule
+ *  - tableKeys={"hid":"0khROPje","bid":"MwV6HuPm","date":"2023-04-01"}
+ *  - column=schedule
+ *  - jsonKeys=["UID19"]
+ */
+function fetchPartOfData()
+{
+  // ==== パラメータ取得 ====
+  $table        = PRMS('table');         // 例: "ahdschedule"
+  $tableKeysJson = PRMS('tableKeys');    // 例: '{"hid":"0khROPje","bid":"MwV6HuPm","date":"2023-04-01"}'
+  $column       = PRMS('column');        // 例: "schedule"
+  $jsonKeysJson = PRMS('jsonKeys');      // 例: '["UID19"]'
+
+  // ==== JSONを配列やリストに変換 ====
+  $tableKeys = json_decode($tableKeysJson, true);
+  if (!is_array($tableKeys)) {
+    // tableKeys が不正な場合
+    $rt = [
+      'result' => false,
+      'error' => 'tableKeys が不正なJSONです。'
+    ];
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    return;
+  }
+
+  $jsonKeys = json_decode($jsonKeysJson, true);
+  if (!is_array($jsonKeys)) {
+    // jsonKeys が不正な場合
+    $rt = [
+      'result' => false,
+      'error' => 'jsonKeys が不正なJSONです。'
+    ];
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    return;
+  }
+
+  // ==== DB接続 ====
+  $mysqli = connectDb();
+
+  // ==== timestamp列の存在チェック ====
+  $hasTimestamp = false;
+  $colCheckSql = "SHOW COLUMNS FROM `{$table}`";
+  if ($resCol = $mysqli->query($colCheckSql)) {
+    while ($rowCol = $resCol->fetch_assoc()) {
+      if ($rowCol['Field'] === 'timestamp') {
+        $hasTimestamp = true;
+        break;
+      }
+    }
+  }
+
+  // ==== WHERE句作成 ====
+  $whereArray = [];
+  foreach ($tableKeys as $k => $v) {
+    $escVal = $mysqli->real_escape_string($v);
+    $whereArray[] = "`{$k}` = '{$escVal}'";
+  }
+  $whereStr = implode(' AND ', $whereArray);
+
+  // ==== SELECT句 ====
+  // 必要なカラムは JSONカラムのみでOKだが、エラー確認用に
+  // hid,bid,date なども取ってもいい。しかし今回は不要なので必要最小限にします
+  // ※複数取っても後で捨てるなら問題ありませんが、ここではシンプルに。
+  $selectCols = "`{$column}`";
+  if ($hasTimestamp) {
+    // timestamp もある場合だけ取る（が今回は使用しない）
+    $selectCols .= ", UNIX_TIMESTAMP(`timestamp`) * 1000 AS rowTimestamp";
+  }
+
+  $sql = "
+    SELECT {$selectCols}
+    FROM `{$table}`
+    WHERE {$whereStr}
+  ";
+
+  // ==== クエリ実行 ====
+  $rt = unvList($mysqli, $sql);
+  if (!$rt['result']) {
+    // SQLエラー
+    $rt['error'] = 'SQLエラーが発生しました。';
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    $mysqli->close();
+    return;
+  }
+
+  // ==== レコード件数チェック ====
+  $count = count($rt['dt']);
+  if ($count === 0) {
+    // 該当なし
+    $rt['result'] = false;
+    $rt['error'] = '該当レコードがありません。';
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    $mysqli->close();
+    return;
+  }
+  if ($count > 1) {
+    // 複数あり -> エラー
+    $rt['result'] = false;
+    $rt['error'] = '複数のレコードが見つかったため特定できません。';
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+    $mysqli->close();
+    return;
+  }
+
+  // ==== 1件のレコードを処理 ====
+  $row = $rt['dt'][0];
+  $jsonStr = $row[$column];
+
+  // '[]' を '{}' に置換
+  if ($jsonStr === '[]') {
+    $jsonStr = '{}';
+  }
+
+  // JSONデコード
+  $decodedJson = json_decode($jsonStr, true);
+  if (!is_array($decodedJson)) {
+    // JSON不正の場合は空オブジェクトに
+    $decodedJson = [];
+  }
+
+  // ==== jsonKeys で指定された階層を辿る ====
+  $filteredData = $decodedJson;
+  foreach ($jsonKeys as $jk) {
+    if (isset($filteredData[$jk])) {
+      $filteredData = $filteredData[$jk];
+    } else {
+      // 存在しないキーなら空オブジェクトを返す
+      $filteredData = new stdClass();
+      break;
+    }
+  }
+
+  // ここで $rt は不要なカラムを含むため、最低限の構造にリセットして返す。
+  // 必要であれば 'result' はそのまま保持し、 'dt' だけ作り直す。
+  $resultValue = true; // ここまで来れば結果はtrue
+  $rt = [
+    'result' => $resultValue,
+    'dt' => [
+      [
+        // filteredData のみ返却
+        'filteredData' => $filteredData,
+      ]
+    ],
+  ];
+
+  // ==== JSONとして返却 ====
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+
+
+
 function fetchLineIdList() {
   $lineID = urldecode(PRMS('lineID'));
 
@@ -5777,6 +6005,34 @@ function fetchLineIdList() {
   // 結果をそのまま返す
   echo json_encode($dataResult, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
+}
+
+// 銀行情報取得API
+// 銀行コードだけだったら銀行名を返す
+// 支店コードもあったら支店名を返す
+function fetchBankInfo(): void
+{
+  $bankcode = PRMS('bankcode', true);
+  $branchcode = PRMS('branchcode', true);
+
+  if ($branchcode) {
+    $url = "https://bank.teraren.com/banks/$bankcode/branches/$branchcode.json";
+  } else {
+    $url = "https://bank.teraren.com/banks/$bankcode.json";
+  }
+
+  $json = file_get_contents($url);
+  $json = mb_convert_encoding($json, 'UTF8', 'ASCII,JIS,UTF-8,EUC-JP,SJIS-WIN');
+  $ary = json_decode($json, true);
+
+  // Add 'result: true' to the response
+  if (is_array($ary)) {
+    $ary['result'] = true;
+    echo json_encode($ary, JSON_UNESCAPED_UNICODE);
+  } else {
+    // If decoding fails or the response is not an array, return the original JSON
+    echo $json;
+  }
 }
 
 
@@ -5820,6 +6076,7 @@ else if ($m == 'editAccount')               editAccount();
 else if ($m == 'putAccount')                putAccount();
 else if ($m == 'getAccount')                getAccount();
 else if ($m == 'getAccountByPw')            getAccountByPw();
+else if ($m == 'getCountAttempts')          getCountAttempts();
 else if ($m == 'sendNewKey')                sendNewKey();
 else if ($m == 'sertificatAndNew')          sertificatAndNew();
 else if ($m == 'replaceKey')                sertificatAndNew();  //エイリアス
@@ -5969,6 +6226,9 @@ else if ($m == 'sendLog') sendLog();
 else if ($m == 'sendPartOfData') sendPartOfData();
 else if ($m == 'deletePartOfData') deletePartOfData();
 
+// 汎用JSON取得
+else if ($m == 'fetchPartOfData') fetchPartOfData();
+
 // lineアカウント関連
 else if ($m == 'fetchLineNames') fetchLineNames();
 else if ($m == 'fetchLineAccount') fetchLineAccount();
@@ -5976,6 +6236,8 @@ else if ($m == 'fetchLineNameList') fetchLineNameList();
 else if ($m == 'sendNewBrunchForLineAccount') sendNewBrunchForLineAccount();
 else if ($m == 'fetchLineIdList') fetchLineIdList();
 
+// 銀行情報
+else if ($m == 'fetchBankInfo') fetchBankInfo();
 
 
 else nothing();
