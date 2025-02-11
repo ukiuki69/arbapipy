@@ -579,24 +579,6 @@ function fetchCalender()
   $mysqli->close();
 }
 
-function sendSchedule()
-{
-  $hid = PRMS('hid');
-  $bid = PRMS('bid');
-  $date = PRMS('date');
-  $schedule = PRMS('schedule');
-  $mysqli = connectDb();
-  $sql = "
-    insert into ahdschedule (hid,bid,date,schedule)
-    values ('$hid','$bid','$date','$schedule')
-    on duplicate key update
-    schedule = '$schedule'
-  ";
-  $rt = unvEdit($mysqli, $sql);
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
-  $mysqli->close();
-}
-
 function sendWorkshift()
 {
   $hid = PRMS('hid');
@@ -5042,9 +5024,6 @@ function sendPartOfDailyReportWith2Key()
   echo json_encode($rt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
-
-
-
 function fetchScheduleTimeStamp()
 {
   $hid = PRMS('hid');
@@ -6033,6 +6012,80 @@ function fetchBankInfo(): void
     // If decoding fails or the response is not an array, return the original JSON
     echo $json;
   }
+}
+
+function sendScheduleOld()
+{
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $schedule = PRMS('schedule');
+  $mysqli = connectDb();
+  $sql = "
+    insert into ahdschedule (hid,bid,date,schedule)
+    values ('$hid','$bid','$date','$schedule')
+    on duplicate key update
+    schedule = '$schedule'
+  ";
+  $rt = unvEdit($mysqli, $sql);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+function sendSchedule()
+{
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $schedule = PRMS('schedule');
+  $mysqli = connectDb();
+
+  // トランザクションを開始
+  $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+
+  try {
+    // 既存のスケジュールをフェッチ
+    $sqlFetch = "
+      select schedule from ahdschedule 
+      where hid='$hid' and bid='$bid' and date='$date'
+      FOR UPDATE;
+    ";
+    $result = unvList($mysqli, $sqlFetch);
+    $existingSchedule = $result['dt'][0]['schedule'] ?? '{}';
+    $existingSchedule = json_decode($existingSchedule, true);
+
+    // 新しいスケジュールをデコード
+    $newSchedule = json_decode($schedule, true);
+
+    // 既存のスケジュールと新しいスケジュールをマージ
+    if (is_array($existingSchedule) && is_array($newSchedule)) {
+      $mergedSchedule = array_merge($existingSchedule, $newSchedule);
+    } else {
+      throw new Exception('Invalid schedule data');
+    }
+
+    // マージしたスケジュールをエンコード
+    $finalSchedule = json_encode($mergedSchedule, JSON_UNESCAPED_UNICODE);
+
+    // スケジュールを更新
+    $sql = "
+      insert into ahdschedule (hid,bid,date,schedule)
+      values ('$hid','$bid','$date','$finalSchedule')
+      on duplicate key update
+      schedule = '$finalSchedule'
+    ";
+    $rt = unvEdit($mysqli, $sql);
+
+    // トランザクションをコミット
+    $mysqli->commit();
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  } catch (Exception $e) {
+    // エラーが発生した場合はロールバック
+    $mysqli->rollback();
+    echo json_encode(['result' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+  }
+
+  $mysqli->close();
 }
 
 

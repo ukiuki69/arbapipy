@@ -36,7 +36,6 @@ def ftp_upload(
     except ftplib.all_errors as e:
       return 'false'
 
-
 # # logの設定
 # logger = logging.getLogger(__name__)
 # formatter = '%(asctime)s:%(name)s:%(levelname)s:%(message)s'
@@ -56,9 +55,9 @@ def upLoadthis(upload_src_path, rnddir, upload_dst_path):
   # アップロード先のファイルパス（STORはファイルをアップロードするためのFTPコマンドなので必要です。）
   upload_dst_path = "STOR " + FTPDSTDIR + rnddir + '/' + upload_dst_path 
   # サーバーのユーザー名
-  username = "albatross56@albatross56.xsrv.jp" 
+  username = "alb2024@albatross56.xsrv.jp" 
   # サーバーのログインパスワード
-  password = "kteMpg5D" 
+  password = "fgghd$43#334w##" 
   # FTPサーバポート
   port = 21 
   timeout = 50
