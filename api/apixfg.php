@@ -579,24 +579,6 @@ function fetchCalender()
   $mysqli->close();
 }
 
-function sendSchedule()
-{
-  $hid = PRMS('hid');
-  $bid = PRMS('bid');
-  $date = PRMS('date');
-  $schedule = PRMS('schedule');
-  $mysqli = connectDb();
-  $sql = "
-    insert into ahdschedule (hid,bid,date,schedule)
-    values ('$hid','$bid','$date','$schedule')
-    on duplicate key update
-    schedule = '$schedule'
-  ";
-  $rt = unvEdit($mysqli, $sql);
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
-  $mysqli->close();
-}
-
 function sendWorkshift()
 {
   $hid = PRMS('hid');
@@ -1365,14 +1347,30 @@ function sendPartOfContactJino()
   // 事業所番号よりhid, bidを得る
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
-  // SELECT hid, bid, jino
-  // FROM ahdbrunch
-  // WHERE (hid, bid, date) IN (
-  //   SELECT hid, bid, MAX(date) as max_date
-  //   FROM ahdbrunch
-  //   GROUP BY hid, bid
-  // )
-  // AND jino = '$jino';
+  
+  // 同一jinoで異なるhid,bidのペアが複数存在するかチェック
+  $sql = "
+    SELECT COUNT(DISTINCT CONCAT(hid, '-', bid)) AS count_pairs
+    FROM ahdbrunch
+    WHERE jino = '$jino';
+  ";
+  $rt = unvList($mysqli, $sql);
+  $sqla[] = $sql;
+
+  // 異なるhid,bidのペアが複数存在する場合はエラー
+  if ($rt['dt'][0]['count_pairs'] > 1) {
+    $errobj = [
+      'result' => false,
+      'msg' => "複数の施設が同一の事業所番号で登録されているためデータを特定できません。",
+      'sqla' => $sqla
+    ];
+    echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+    $mysqli->rollback();
+    $mysqli->close();
+    return false;
+  }
+
+  // 同一jinoで同一のhid,bidペアが存在する場合は最新の日付のものを取得
   $sql = "
     SELECT hid, bid, jino, date
     FROM ahdbrunch
@@ -1382,14 +1380,11 @@ function sendPartOfContactJino()
   ";
   $rt = unvList($mysqli, $sql);
   $sqla[] = $sql;
-  if (count($rt['dt']) === 1) {
-    $hid = $rt['dt'][0]['hid'];
-    $bid = $rt['dt'][0]['bid'];
-  }
-  if (count($rt['dt']) > 1) {
+
+  if (count($rt['dt']) === 0) {
     $errobj = [
       'result' => false,
-      'msg' => "Data cannot be identified because there are multiple offices.",
+      'msg' => "指定された事業所番号が見つかりません。",
       'sqla' => $sqla
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
@@ -1397,6 +1392,10 @@ function sendPartOfContactJino()
     $mysqli->close();
     return false;
   }
+
+  $hid = $rt['dt'][0]['hid'];
+  $bid = $rt['dt'][0]['bid'];
+
   // mail, uid, faptalkenの認証を行う
   $sql = "
     SELECT a.hid, a.bid, a.uid, a.date, a.faptoken, a.pmail
@@ -1515,9 +1514,33 @@ function fetchPartOfContactJino()
   } else {
     $mailWhere = " true";
   }
-  // 事業所番号よりhid, bidを得る
+
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+
+  // 同一jinoで異なるhid,bidのペアが複数存在するかチェック
+  $sql = "
+    SELECT COUNT(DISTINCT CONCAT(hid, '-', bid)) AS count_pairs
+    FROM ahdbrunch
+    WHERE jino = '$jino';
+  ";
+  $rt = unvList($mysqli, $sql);
+  $sqla[] = $sql;
+
+  // 異なるhid,bidのペアが複数存在する場合はエラー
+  if ($rt['dt'][0]['count_pairs'] > 1) {
+    $errobj = [
+      'result' => false,
+      'msg' => "複数の施設が同一の事業所番号で登録されているためデータを特定できません。",
+      'sqla' => $sqla
+    ];
+    echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+    $mysqli->rollback();
+    $mysqli->close();
+    return false;
+  }
+
+  // 事業所番号よりhid, bidを得る
   $sql = "
     SELECT hid, bid, jino, date
     FROM ahdbrunch
@@ -1580,21 +1603,6 @@ function fetchPartOfContactJino()
     $mysqli->close();
     return false;
   }
-  // if (count($rt['dt']) === 1){
-  //   $hid = $rt['dt'][0]['hid'];
-  //   $bid = $rt['dt'][0]['bid'];
-  // }
-  // if (count($rt['dt']) > 1){
-  //   $errobj = [
-  //     'result' => false,
-  //     'msg' => "Data cannot be identified because there are multiple user.",
-  //     'sqla' => $sqla
-  //   ];
-  //   echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
-  //   $mysqli->rollback();
-  //   $mysqli->close();    
-  //   return false;
-  // }
   if (count($rt['dt']) === 0) {
     $errobj = [
       'result' => false,
@@ -4557,7 +4565,8 @@ function getUsersTel()
       c.hname, d.bname,
       a.hid, a.bid, a.uid, a.name, a.pname, a.birthday, 
       a.pphone, a.pphone1, a.date, a.faptoken,
-      e.ext
+      e.ext,
+      a.hno, d.sbname, d.bname
     FROM
       ahduser a
     INNER JOIN (
@@ -5041,9 +5050,6 @@ function sendPartOfDailyReportWith2Key()
   $mysqli->close();
   echo json_encode($rt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
-
-
-
 
 function fetchScheduleTimeStamp()
 {
@@ -6033,6 +6039,80 @@ function fetchBankInfo(): void
     // If decoding fails or the response is not an array, return the original JSON
     echo $json;
   }
+}
+
+function sendScheduleOld()
+{
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $schedule = PRMS('schedule');
+  $mysqli = connectDb();
+  $sql = "
+    insert into ahdschedule (hid,bid,date,schedule)
+    values ('$hid','$bid','$date','$schedule')
+    on duplicate key update
+    schedule = '$schedule'
+  ";
+  $rt = unvEdit($mysqli, $sql);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+function sendSchedule()
+{
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $schedule = PRMS('schedule');
+  $mysqli = connectDb();
+
+  // トランザクションを開始
+  $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+
+  try {
+    // 既存のスケジュールをフェッチ
+    $sqlFetch = "
+      select schedule from ahdschedule 
+      where hid='$hid' and bid='$bid' and date='$date'
+      FOR UPDATE;
+    ";
+    $result = unvList($mysqli, $sqlFetch);
+    $existingSchedule = $result['dt'][0]['schedule'] ?? '{}';
+    $existingSchedule = json_decode($existingSchedule, true);
+
+    // 新しいスケジュールをデコード
+    $newSchedule = json_decode($schedule, true);
+
+    // 既存のスケジュールと新しいスケジュールをマージ
+    if (is_array($existingSchedule) && is_array($newSchedule)) {
+      $mergedSchedule = array_merge($existingSchedule, $newSchedule);
+    } else {
+      throw new Exception('Invalid schedule data');
+    }
+
+    // マージしたスケジュールをエンコード
+    $finalSchedule = json_encode($mergedSchedule, JSON_UNESCAPED_UNICODE);
+
+    // スケジュールを更新
+    $sql = "
+      insert into ahdschedule (hid,bid,date,schedule)
+      values ('$hid','$bid','$date','$finalSchedule')
+      on duplicate key update
+      schedule = '$finalSchedule'
+    ";
+    $rt = unvEdit($mysqli, $sql);
+
+    // トランザクションをコミット
+    $mysqli->commit();
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  } catch (Exception $e) {
+    // エラーが発生した場合はロールバック
+    $mysqli->rollback();
+    echo json_encode(['result' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+  }
+
+  $mysqli->close();
 }
 
 

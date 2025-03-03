@@ -579,24 +579,6 @@ function fetchCalender()
   $mysqli->close();
 }
 
-function sendSchedule()
-{
-  $hid = PRMS('hid');
-  $bid = PRMS('bid');
-  $date = PRMS('date');
-  $schedule = PRMS('schedule');
-  $mysqli = connectDb();
-  $sql = "
-    insert into ahdschedule (hid,bid,date,schedule)
-    values ('$hid','$bid','$date','$schedule')
-    on duplicate key update
-    schedule = '$schedule'
-  ";
-  $rt = unvEdit($mysqli, $sql);
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
-  $mysqli->close();
-}
-
 function sendWorkshift()
 {
   $hid = PRMS('hid');
@@ -2152,25 +2134,35 @@ function getAccount()
   $mysqli->close();
 }
 
+// ログインなどの失敗回数をカウントする
+function getCountAttempts()
+{
+  $ip_address = $_SERVER['REMOTE_ADDR']; // クライアントのIPアドレスを取得
+  $interval_minutes = PRMS('interval_minutes');
+  $interval_minutes = ($interval_minutes === '') ? 10 : $interval_minutes;  
+  $mysqli = connectDb();
+  $sql = "
+    SELECT attempt_count count FROM ahdAttempts 
+    WHERE ip_address = '$ip_address' 
+    AND attempt_time >= NOW() - INTERVAL $interval_minutes MINUTE;
+  ";
+  $rt = unvList($mysqli, $sql);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
 // メールアドレスとパスワードのみでアカウントを検索する
 // 複数の事業所が返ってくることを想定
 function getAccountByPw()
 {
   $mail = PRMS('mail');
+  $interval_minutes = PRMS('interval_minutes');
+  $interval_minutes = ($interval_minutes === '') ? 10 : $interval_minutes;
   $pass = encodeCph(PRMS('passwd'));
   $mysqli = connectDb();
-  // $sql = "
-  //   select 
-  //     account.mail, account.lname,account.fname ,
-  //     account.hid, account.bid,
-  //     brunch.bname, brunch.sbname, brunch.jino,  
-  //     com.hname, com.shname
-  //   from ahdaccount as account
-  //   join ahdbrunch brunch using (hid, bid)
-  //   join ahdcompany com using (hid)
-  //   where passwd = '$pass'
-  //   and mail = '$mail';
-  // ";
+  $ip_address = $_SERVER['REMOTE_ADDR']; // クライアントのIPアドレスを取得
+
+
   $sql = "
     select 
       account.mail, account.lname,account.fname ,
@@ -2190,10 +2182,51 @@ function getAccountByPw()
     and mail = '$mail';
   ";
 
-
   $rt = unvList($mysqli, $sql);
-  // $rt[dt][0]['passwd'] = decodeCph($rt[dt][0]['passwd']);
-  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+
+  if (count($rt['dt']) === 0) {
+    // 古い試行記録を削除
+    $sql_delete_old_attempts = "
+      DELETE FROM ahdAttempts 
+      WHERE attempt_time < NOW() - INTERVAL $interval_minutes MINUTE;
+    ";
+    $mysqli->query($sql_delete_old_attempts);
+
+    // 試行回数を記録
+    $sql_attempt = "
+      INSERT INTO ahdAttempts (ip_address, attempt_count)
+      VALUES ('$ip_address', 1)
+      ON DUPLICATE KEY UPDATE attempt_count = attempt_count + 1;
+    ";
+    $mysqli->query($sql_attempt);
+
+    // 認証失敗時の処理
+    $sql_count = "
+      SELECT attempt_count 
+      FROM ahdAttempts 
+      WHERE ip_address = '$ip_address'
+      AND attempt_time >= NOW() - INTERVAL $interval_minutes MINUTE;
+    ";
+    $result = $mysqli->query($sql_count);
+    $row = $result->fetch_assoc();
+    $attempt_count = $row['attempt_count'];
+
+    $rt['attempt_count'] = $attempt_count;
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  } else {
+    // 認証成功時の処理
+    $rt['attempt_count'] = 0;
+    
+    // 該当レコードを削除
+    $sql_delete_attempts = "
+        DELETE FROM ahdAttempts 
+        WHERE ip_address = '$ip_address';
+    ";
+    $mysqli->query($sql_delete_attempts);
+
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  }
+
   $mysqli->close();
 }
 
@@ -4506,7 +4539,8 @@ function getUsersTel()
       c.hname, d.bname,
       a.hid, a.bid, a.uid, a.name, a.pname, a.birthday, 
       a.pphone, a.pphone1, a.date, a.faptoken,
-      e.ext
+      e.ext,
+      a.hno, d.sbname, d.bname
     FROM
       ahduser a
     INNER JOIN (
@@ -4990,9 +5024,6 @@ function sendPartOfDailyReportWith2Key()
   $mysqli->close();
   echo json_encode($rt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
-
-
-
 
 function fetchScheduleTimeStamp()
 {
@@ -5984,6 +6015,80 @@ function fetchBankInfo(): void
   }
 }
 
+function sendScheduleOld()
+{
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $schedule = PRMS('schedule');
+  $mysqli = connectDb();
+  $sql = "
+    insert into ahdschedule (hid,bid,date,schedule)
+    values ('$hid','$bid','$date','$schedule')
+    on duplicate key update
+    schedule = '$schedule'
+  ";
+  $rt = unvEdit($mysqli, $sql);
+  echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  $mysqli->close();
+}
+
+function sendSchedule()
+{
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  $schedule = PRMS('schedule');
+  $mysqli = connectDb();
+
+  // トランザクションを開始
+  $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+
+  try {
+    // 既存のスケジュールをフェッチ
+    $sqlFetch = "
+      select schedule from ahdschedule 
+      where hid='$hid' and bid='$bid' and date='$date'
+      FOR UPDATE;
+    ";
+    $result = unvList($mysqli, $sqlFetch);
+    $existingSchedule = $result['dt'][0]['schedule'] ?? '{}';
+    $existingSchedule = json_decode($existingSchedule, true);
+
+    // 新しいスケジュールをデコード
+    $newSchedule = json_decode($schedule, true);
+
+    // 既存のスケジュールと新しいスケジュールをマージ
+    if (is_array($existingSchedule) && is_array($newSchedule)) {
+      $mergedSchedule = array_merge($existingSchedule, $newSchedule);
+    } else {
+      throw new Exception('Invalid schedule data');
+    }
+
+    // マージしたスケジュールをエンコード
+    $finalSchedule = json_encode($mergedSchedule, JSON_UNESCAPED_UNICODE);
+
+    // スケジュールを更新
+    $sql = "
+      insert into ahdschedule (hid,bid,date,schedule)
+      values ('$hid','$bid','$date','$finalSchedule')
+      on duplicate key update
+      schedule = '$finalSchedule'
+    ";
+    $rt = unvEdit($mysqli, $sql);
+
+    // トランザクションをコミット
+    $mysqli->commit();
+    echo json_encode($rt, JSON_UNESCAPED_UNICODE);
+  } catch (Exception $e) {
+    // エラーが発生した場合はロールバック
+    $mysqli->rollback();
+    echo json_encode(['result' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+  }
+
+  $mysqli->close();
+}
+
 
 function nothing()
 {
@@ -6025,6 +6130,7 @@ else if ($m == 'editAccount')               editAccount();
 else if ($m == 'putAccount')                putAccount();
 else if ($m == 'getAccount')                getAccount();
 else if ($m == 'getAccountByPw')            getAccountByPw();
+else if ($m == 'getCountAttempts')          getCountAttempts();
 else if ($m == 'sendNewKey')                sendNewKey();
 else if ($m == 'sertificatAndNew')          sertificatAndNew();
 else if ($m == 'replaceKey')                sertificatAndNew();  //エイリアス
