@@ -1,4 +1,5 @@
 <?php
+include_once 'cipher.php';
 error_reporting(E_ALL);
 header("Access-Control-Allow-Origin: *");
 header('Access-Control-Allow-Headers: Content-Type');
@@ -36,7 +37,7 @@ if ($self === 'apixfg.php') {
 define("DBNAMEREAL", "albatross56_sv1"); // 本番用
 
 // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
-require './cipher.php';
+// require './cipher.php';
 
 $phpnow = date("Y-m-d H:i:s");
 $MAX_KEYS = 5;
@@ -109,8 +110,8 @@ function connectDbPrd()
 {
   $mysqli = new mysqli(
     'mysql10077.xserver.jp',
-    'albatross56_ysmr',
-    'kteMpg5D',
+    'albatross56_x84e',
+    'eGR2JJtj.i7EpSN',
     'albatross56_sv1'
   );
   if ($mysqli->connect_error) {
@@ -135,8 +136,8 @@ function connectDb()
   }
   $mysqli = new mysqli(
     'mysql10077.xserver.jp',
-    'albatross56_ysmr',
-    'kteMpg5D',
+    'albatross56_x84e',
+    'eGR2JJtj.i7EpSN',
     // 'albatross56_sv1'
     $dbname
   );
@@ -377,7 +378,7 @@ function companybrunchM()
     select brunch.*, 
     com.hname, com.shname, com.postal cpostal, com.city ccity,
     com.address caddress, com.tel ctel, com.fax cfax, com.etc cetc,
-    com.yaku daihyouyakusyoku, com.daihyou daihyou,
+    com.yaku daihyouyakusyoku, com.daihyou daihyou,com.confirmPayment,
     bext.ext
     from ahdbrunch brunch 
     join ahdcompany com
@@ -3781,13 +3782,30 @@ function getMinMaxOfMonnth()
   if (count($rt['dt'])) {
     $max = $rt['dt'][0]['max'];
   }
+  // 単純なスケジュールの日付を取得
+  $sql = "
+    select date from ahdschedule
+    where bid='$bid' and hid='$hid';
+  ";
+  $rt = unvList($mysqli, $sql);
+  $rtScheduleList = $rt;
+  // 単純なカレンダーの日付を取得
+  $sql = "
+    select date from ahdcalender
+    where bid='$bid' and hid='$hid';
+  ";
+  $rt = unvList($mysqli, $sql);
+  $rtCalenderList = $rt;
+
   $rt = [];
   $rt['rt0'] = $rt0;
   $rt['rt1'] = $rt1;
   $rt['rt2'] = $rt2;
   $rt['min'] = $min;
   $rt['max'] = $max;
-  $rt['result'] = $rt0['result'] && $rt1['result'];
+  $rt['rtScheduleList'] = $rtScheduleList;
+  $rt['rtCalenderList'] = $rtCalenderList;
+  $rt['result'] = $rt0['result'] && $rt1['result'] && $rt2['result'] && $rtCalenderList['result'] && $rtScheduleList['result'];
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }

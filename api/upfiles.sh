@@ -2,8 +2,8 @@
 
 # FTP接続情報
 HOST="sv10767.xserver.jp"
-USER="alb2024@albatross56.xsrv.jp"
-PASS="fgghd$43#334w##"
+USER="albxe56tyuvh98@albatross56.xsrv.jp"
+PASS="xDT-3ky*5_%DwHi"
 REMOTEPATH="/rbatos.com/public_html/houday/api"
 
 # 取得したファイル名の表示とアップロード

@@ -56,8 +56,8 @@ function PRMS_ARRAY(){
 function connectDb(){
   $mysqli = new mysqli(
     'mysql10077.xserver.jp',
-    'albatross56_ysmr',
-    'kteMpg5D',
+    'albatross56_x84e',
+    'eGR2JJtj.i7EpSN',
     'albatross56_sv1'
   );
   if ($mysqli->connect_error) {

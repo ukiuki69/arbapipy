@@ -19,7 +19,7 @@ define('REFERENCE_DATE_OFFSET', 14);
 define('REFERENCE_DATE', '2024-12-31'); // 例: 2023年10月1日
 // 参考: REFERENCE_DATE_OFFSETを使用して設定する場合は、以下のコードを利用できます。
 // define('REFERENCE_DATE', date('Ymd', strtotime('-' . REFERENCE_DATE_OFFSET . ' days')));
-define('DATE_RANGE', 30);
+define('DATE_RANGE', 370);
 
 define('NORMAL_SIZE_THRESHOLD', 100 * 1024); // 100KB
 define('THUMB_SIZE_THRESHOLD', 40 * 1024);   // 40KB

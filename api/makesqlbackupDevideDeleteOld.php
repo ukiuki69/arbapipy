@@ -1,8 +1,8 @@
 <?php
 
 $dbHost = 'mysql10077.xserver.jp';
-$dbUser = 'albatross56_ysmr';
-$dbPass = 'kteMpg5D';
+$dbUser = 'albatross56_x84e';
+$dbPass = 'eGR2JJtj.i7EpSN';
 $dbName = 'albatross56_sv1';
 
 // バックアップファイルの保存ディレクトリを設定

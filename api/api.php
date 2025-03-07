@@ -1,4 +1,5 @@
 <?php
+include_once 'cipher.php';
 error_reporting(E_ALL);
 header("Access-Control-Allow-Origin: *");
 header('Access-Control-Allow-Headers: Content-Type');
@@ -36,8 +37,7 @@ if ($self === 'apixfg.php') {
 define("DBNAMEREAL", "albatross56_sv1"); // 本番用
 
 // define ("DBNAME", "albatross56_sandbox"); // サンドボックス
-
-require './cipher.php';
+// require './cipher.php';
 
 $phpnow = date("Y-m-d H:i:s");
 $MAX_KEYS = 5;
@@ -110,8 +110,8 @@ function connectDbPrd()
 {
   $mysqli = new mysqli(
     'mysql10077.xserver.jp',
-    'albatross56_ysmr',
-    'kteMpg5D',
+    'albatross56_x84e',
+    'eGR2JJtj.i7EpSN',
     'albatross56_sv1'
   );
   if ($mysqli->connect_error) {
@@ -136,8 +136,8 @@ function connectDb()
   }
   $mysqli = new mysqli(
     'mysql10077.xserver.jp',
-    'albatross56_ysmr',
-    'kteMpg5D',
+    'albatross56_x84e',
+    'eGR2JJtj.i7EpSN',
     // 'albatross56_sv1'
     $dbname
   );
@@ -378,7 +378,7 @@ function companybrunchM()
     select brunch.*, 
     com.hname, com.shname, com.postal cpostal, com.city ccity,
     com.address caddress, com.tel ctel, com.fax cfax, com.etc cetc,
-    com.yaku daihyouyakusyoku, com.daihyou daihyou,
+    com.yaku daihyouyakusyoku, com.daihyou daihyou,com.confirmPayment,
     bext.ext
     from ahdbrunch brunch 
     join ahdcompany com
@@ -1347,14 +1347,30 @@ function sendPartOfContactJino()
   // 事業所番号よりhid, bidを得る
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
-  // SELECT hid, bid, jino
-  // FROM ahdbrunch
-  // WHERE (hid, bid, date) IN (
-  //   SELECT hid, bid, MAX(date) as max_date
-  //   FROM ahdbrunch
-  //   GROUP BY hid, bid
-  // )
-  // AND jino = '$jino';
+  
+  // 同一jinoで異なるhid,bidのペアが複数存在するかチェック
+  $sql = "
+    SELECT COUNT(DISTINCT CONCAT(hid, '-', bid)) AS count_pairs
+    FROM ahdbrunch
+    WHERE jino = '$jino';
+  ";
+  $rt = unvList($mysqli, $sql);
+  $sqla[] = $sql;
+
+  // 異なるhid,bidのペアが複数存在する場合はエラー
+  if ($rt['dt'][0]['count_pairs'] > 1) {
+    $errobj = [
+      'result' => false,
+      'msg' => "複数の施設が同一の事業所番号で登録されているためデータを特定できません。",
+      'sqla' => $sqla
+    ];
+    echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+    $mysqli->rollback();
+    $mysqli->close();
+    return false;
+  }
+
+  // 同一jinoで同一のhid,bidペアが存在する場合は最新の日付のものを取得
   $sql = "
     SELECT hid, bid, jino, date
     FROM ahdbrunch
@@ -1364,14 +1380,11 @@ function sendPartOfContactJino()
   ";
   $rt = unvList($mysqli, $sql);
   $sqla[] = $sql;
-  if (count($rt['dt']) === 1) {
-    $hid = $rt['dt'][0]['hid'];
-    $bid = $rt['dt'][0]['bid'];
-  }
-  if (count($rt['dt']) > 1) {
+
+  if (count($rt['dt']) === 0) {
     $errobj = [
       'result' => false,
-      'msg' => "Data cannot be identified because there are multiple offices.",
+      'msg' => "指定された事業所番号が見つかりません。",
       'sqla' => $sqla
     ];
     echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
@@ -1379,6 +1392,10 @@ function sendPartOfContactJino()
     $mysqli->close();
     return false;
   }
+
+  $hid = $rt['dt'][0]['hid'];
+  $bid = $rt['dt'][0]['bid'];
+
   // mail, uid, faptalkenの認証を行う
   $sql = "
     SELECT a.hid, a.bid, a.uid, a.date, a.faptoken, a.pmail
@@ -1497,9 +1514,33 @@ function fetchPartOfContactJino()
   } else {
     $mailWhere = " true";
   }
-  // 事業所番号よりhid, bidを得る
+
   $mysqli = connectDb();
   $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+
+  // 同一jinoで異なるhid,bidのペアが複数存在するかチェック
+  $sql = "
+    SELECT COUNT(DISTINCT CONCAT(hid, '-', bid)) AS count_pairs
+    FROM ahdbrunch
+    WHERE jino = '$jino';
+  ";
+  $rt = unvList($mysqli, $sql);
+  $sqla[] = $sql;
+
+  // 異なるhid,bidのペアが複数存在する場合はエラー
+  if ($rt['dt'][0]['count_pairs'] > 1) {
+    $errobj = [
+      'result' => false,
+      'msg' => "複数の施設が同一の事業所番号で登録されているためデータを特定できません。",
+      'sqla' => $sqla
+    ];
+    echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
+    $mysqli->rollback();
+    $mysqli->close();
+    return false;
+  }
+
+  // 事業所番号よりhid, bidを得る
   $sql = "
     SELECT hid, bid, jino, date
     FROM ahdbrunch
@@ -1562,21 +1603,6 @@ function fetchPartOfContactJino()
     $mysqli->close();
     return false;
   }
-  // if (count($rt['dt']) === 1){
-  //   $hid = $rt['dt'][0]['hid'];
-  //   $bid = $rt['dt'][0]['bid'];
-  // }
-  // if (count($rt['dt']) > 1){
-  //   $errobj = [
-  //     'result' => false,
-  //     'msg' => "Data cannot be identified because there are multiple user.",
-  //     'sqla' => $sqla
-  //   ];
-  //   echo json_encode($errobj, JSON_UNESCAPED_UNICODE);
-  //   $mysqli->rollback();
-  //   $mysqli->close();    
-  //   return false;
-  // }
   if (count($rt['dt']) === 0) {
     $errobj = [
       'result' => false,
@@ -3756,13 +3782,30 @@ function getMinMaxOfMonnth()
   if (count($rt['dt'])) {
     $max = $rt['dt'][0]['max'];
   }
+  // 単純なスケジュールの日付を取得
+  $sql = "
+    select date from ahdschedule
+    where bid='$bid' and hid='$hid';
+  ";
+  $rt = unvList($mysqli, $sql);
+  $rtScheduleList = $rt;
+  // 単純なカレンダーの日付を取得
+  $sql = "
+    select date from ahdcalender
+    where bid='$bid' and hid='$hid';
+  ";
+  $rt = unvList($mysqli, $sql);
+  $rtCalenderList = $rt;
+
   $rt = [];
   $rt['rt0'] = $rt0;
   $rt['rt1'] = $rt1;
   $rt['rt2'] = $rt2;
   $rt['min'] = $min;
   $rt['max'] = $max;
-  $rt['result'] = $rt0['result'] && $rt1['result'];
+  $rt['rtScheduleList'] = $rtScheduleList;
+  $rt['rtCalenderList'] = $rtCalenderList;
+  $rt['result'] = $rt0['result'] && $rt1['result'] && $rt2['result'] && $rtCalenderList['result'] && $rtScheduleList['result'];
   echo json_encode($rt, JSON_UNESCAPED_UNICODE);
   $mysqli->close();
 }
@@ -5190,7 +5233,7 @@ function fetchUsersPlan()
     $sql .= " limit 0, {$limit}";
   }
   // lastmanthを指定するときはlimitを指定しない
-  if (empty($lastmonth)) {
+  if (empty($lastmonth) && empty($limit)) {
     $sql .= " limit 0, 10";
   }
 
@@ -5663,6 +5706,189 @@ function deletePartOfData()
     echo '{"result":false, "error": "Transaction failed"}';
   }
 }
+
+function sendPartOfDataWithKeys()
+{
+  $table = PRMS('table');
+  $column = PRMS('column');
+  $partOfData = PRMS('partOfData');
+  
+  // 従来のパラメータも取得
+  $hid = PRMS('hid');
+  $bid = PRMS('bid');
+  $date = PRMS('date');
+  
+  // tableKeysパラメータの取得と処理
+  $tableKeysJson = PRMS('tableKeys');
+  $tableKeys = null;
+  
+  if (!empty($tableKeysJson)) {
+    $tableKeys = json_decode($tableKeysJson, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      echo '{"result":false, "error": "Invalid tableKeys JSON format"}';
+      return false;
+    }
+  } else {
+    // 従来方式のパラメータを使用
+    $tableKeys = [
+      'hid' => $hid,
+      'bid' => $bid,
+      'date' => $date
+    ];
+  }
+
+  $mysqli = connectDb();
+  $mysqli->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
+
+  try {
+    $mysqli->begin_transaction(MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT);
+
+    // WHERE句とバインドパラメータの動的構築
+    $whereClause = [];
+    $bindTypes = "";
+    $bindValues = [];
+
+    foreach ($tableKeys as $key => $value) {
+      $whereClause[] = "`$key` = ?";
+      $bindTypes .= "s"; // 全て文字列として扱う
+      $bindValues[] = $value;
+    }
+
+    $whereStr = implode(" AND ", $whereClause);
+
+    // テーブル名とカラム名をバッククォートで囲む
+    $sql = "
+          SELECT `$column` FROM `$table`
+          WHERE $whereStr
+          FOR UPDATE
+      ";
+
+    $stmt = $mysqli->prepare($sql);
+    if (!$stmt) {
+      echo '{"result":false, "error": "SQL Prepare failed: ' . $mysqli->error . '"}';
+      return false;
+    }
+
+    // 動的にバインドパラメータを設定
+    if (!empty($bindValues)) {
+      $bindParams = array_merge([$bindTypes], $bindValues);
+      $bindParamsReferences = [];
+      foreach ($bindParams as $key => $value) {
+        $bindParamsReferences[$key] = &$bindParams[$key];
+      }
+      call_user_func_array([$stmt, 'bind_param'], $bindParamsReferences);
+    }
+
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $existingData = $result->fetch_assoc()[$column] ?? null;
+
+    if (!$existingData) {
+      echo '{"result":false, "error": "Exist data not found."}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
+
+    // JSON デコードとエラーチェック
+    $existingData = json_decode($existingData, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      error_log("JSON Decode Error (existingData): " . json_last_error_msg());
+      echo '{"result":false, "error": "Invalid existingData JSON"}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
+
+    $partialData = json_decode($partOfData, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      error_log("JSON Decode Error (partOfData): " . json_last_error_msg());
+      echo '{"result":false, "error": "Invalid partOfData JSON"}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
+
+    // データをマージ
+    $mergedData = recursiveMerge($existingData, $partialData);
+
+    // JSON エンコードとエラーチェック
+    $finalJson = json_encode($mergedData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      error_log("JSON Encode Error: " . json_last_error_msg());
+      echo '{"result":false, "error": "JSON encoding failed"}';
+      $mysqli->rollback();
+      $stmt->close();
+      $mysqli->close();
+      return false;
+    }
+
+    // INSERTクエリの動的構築
+    $columns = array_keys($tableKeys);
+    $columns[] = $column;
+    
+    $placeholders = array_fill(0, count($tableKeys), "?");
+    $placeholders[] = "?";
+    
+    $updateParts = [];
+    foreach ($columns as $col) {
+      $updateParts[] = "`$col` = VALUES(`$col`)";
+    }
+    
+    $columnsStr = "`" . implode("`, `", $columns) . "`";
+    $placeholdersStr = implode(", ", $placeholders);
+    $updateStr = implode(", ", $updateParts);
+
+    // プリペアドステートメントで安全な INSERT 文
+    $updateStmt = $mysqli->prepare("
+          INSERT INTO `$table` ($columnsStr)
+          VALUES ($placeholdersStr)
+          ON DUPLICATE KEY UPDATE $updateStr
+      ");
+    
+    if (!$updateStmt) {
+      echo '{"result":false, "error": "SQL Prepare failed (update): ' . $mysqli->error . '"}';
+      return false;
+    }
+
+    // UPDATE用のバインドパラメータ
+    $updateBindTypes = str_repeat("s", count($tableKeys) + 1);
+    $updateBindValues = array_values($tableKeys);
+    $updateBindValues[] = $finalJson;
+    
+    // 動的にバインドパラメータを設定
+    $updateBindParams = array_merge([$updateBindTypes], $updateBindValues);
+    $updateBindParamsReferences = [];
+    foreach ($updateBindParams as $key => $value) {
+      $updateBindParamsReferences[$key] = &$updateBindParams[$key];
+    }
+    call_user_func_array([$updateStmt, 'bind_param'], $updateBindParamsReferences);
+    
+    $updateResult = $updateStmt->execute();
+
+    if ($updateResult) {
+      $mysqli->commit();
+      echo '{"result":true}';
+    } else {
+      error_log("SQL Error (update): " . $updateStmt->error);
+      $mysqli->rollback();
+      echo '{"result":false, "error": "Database update failed"}';
+    }
+
+    $stmt->close();
+    $updateStmt->close();
+    $mysqli->close();
+  } catch (Exception $e) {
+    error_log("Transaction failed: " . $e->getMessage());
+    $mysqli->rollback();
+    $mysqli->close();
+    echo '{"result":false, "error": "Transaction failed"}';
+  }
+}
+
 
 function fetchLineNames() {
   $mysqli = connectDb();
@@ -6278,6 +6504,7 @@ else if ($m == 'deleteUsersPlan') deleteUsersPlan();
 else if ($m == 'sendLog') sendLog();
 // 汎用JSOM更新
 else if ($m == 'sendPartOfData') sendPartOfData();
+else if ($m == 'sendPartOfDataWithKeys') sendPartOfDataWithKeys();
 else if ($m == 'deletePartOfData') deletePartOfData();
 
 // 汎用JSON取得

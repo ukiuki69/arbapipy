@@ -11,8 +11,8 @@
 */
 
 $host = 'mysql10077.xserver.jp';
-$username = 'albatross56_ysmr';
-$password = 'kteMpg5D';
+$username = 'albatross56_x84e';
+$password = 'eGR2JJtj.i7EpSN';
 $db1 = 'albatross56_sv1'; // ソースデータベース
 $db2 = 'albatross56_albtest'; // ターゲットデータベース
 $page_size = 1000; // 一度に処理する行数

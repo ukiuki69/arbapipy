@@ -10,7 +10,7 @@
 // PHPのデフォルトタイムゾーンをJSTに設定
 date_default_timezone_set('Asia/Tokyo');
 
-$mysqli = new mysqli('mysql10077.xserver.jp', 'albatross56_ysmr', 'kteMpg5D', 'albatross56_sv1');
+$mysqli = new mysqli('mysql10077.xserver.jp', 'albatross56_x84e', 'eGR2JJtj.i7EpSN', 'albatross56_sv1');
 
 $output = array();
 if ($mysqli->connect_error) {
